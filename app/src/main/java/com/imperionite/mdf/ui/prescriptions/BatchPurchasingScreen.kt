@@ -39,11 +39,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.imperionite.mdf.data.local.entity.PrescriptionMedicineEntity
+import com.imperionite.mdf.data.local.entity.PurchaseBatchWithItems
 import com.imperionite.mdf.data.repository.PurchaseItemDraft
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.time.LocalDate
 import java.text.NumberFormat
+import java.time.LocalDate
 import java.util.Locale
 
 private data class PurchaseMedicineForm(
@@ -68,32 +69,71 @@ fun BatchPurchasingScreen(
         purchaseDate: String,
         notes: String,
         items: List<PurchaseItemDraft>
-    ) -> Unit
+    ) -> Unit,
+    editingBatch: PurchaseBatchWithItems? = null,
+    onUpdate: (
+        batchId: Long,
+        purchaseDate: String,
+        notes: String,
+        items: List<PurchaseItemDraft>
+    ) -> Unit = { _, _, _, _ -> }
 ) {
+    val isEditing = editingBatch != null
+
     val currencyFormatter = remember {
-        NumberFormat.getCurrencyInstance(
-            Locale.Builder()
-                .setLanguage("en")
-                .setRegion("PH")
-                .build()
-        )
+        NumberFormat.getCurrencyInstance(Locale("en", "PH"))
     }
 
-    val forms = remember(medicines, purchasedQuantities) {
+    // Quantities already recorded in the batch being edited.
+    // These are added back to the available quantity for this form.
+    val quantitiesInEditingBatch = remember(editingBatch?.batch?.id) {
+        editingBatch?.items
+            ?.groupBy { it.prescriptionMedicineId }
+            ?.mapValues { (_, items) ->
+                items.sumOf { it.purchasedQuantity }
+            }
+            ?: emptyMap()
+    }
+
+    val existingItems = remember(editingBatch?.batch?.id) {
+        editingBatch?.items?.associateBy {
+            it.prescriptionMedicineId
+        } ?: emptyMap()
+    }
+
+    val forms = remember(
+        medicines,
+        purchasedQuantities,
+        editingBatch?.batch?.id
+    ) {
         mutableStateListOf<PurchaseMedicineForm>().apply {
             medicines.forEach { medicine ->
-                val purchased = purchasedQuantities[medicine.id] ?: 0.0
-                val remaining =
-                    (medicine.prescribedQuantity - purchased).coerceAtLeast(0.0)
+                val totalPurchased =
+                    purchasedQuantities[medicine.id] ?: 0.0
+
+                val quantityInThisBatch =
+                    existingItems[medicine.id]?.purchasedQuantity ?: 0.0
+
+                val remainingForThisForm = (
+                        medicine.prescribedQuantity -
+                                totalPurchased +
+                                quantityInThisBatch
+                        ).coerceAtLeast(0.0)
+
+                val existingItem = existingItems[medicine.id]
 
                 add(
                     PurchaseMedicineForm(
                         medicine = medicine,
-                        remainingQuantity = remaining,
-                        selected = false,
-                        quantityText = "",
+                        remainingQuantity = remainingForThisForm,
+                        selected = existingItem != null,
+                        quantityText = existingItem
+                            ?.purchasedQuantity
+                            ?.let { formatQuantity(it) }
+                            ?: "",
                         unitPriceText = centsToMoneyText(
-                            medicine.unitPriceCentavos
+                            existingItem?.unitPriceCentavos
+                                ?: medicine.unitPriceCentavos
                         )
                     )
                 )
@@ -101,11 +141,23 @@ fun BatchPurchasingScreen(
         }
     }
 
-    var purchaseDate by remember { mutableStateOf(LocalDate.now().toString()) }
-    var notes by remember { mutableStateOf("") }
+    var purchaseDate by remember(editingBatch?.batch?.id) {
+        mutableStateOf(
+            editingBatch?.batch?.purchaseDate
+                ?: LocalDate.now().toString()
+        )
+    }
+
+    var notes by remember(editingBatch?.batch?.id) {
+        mutableStateOf(editingBatch?.batch?.notes ?: "")
+    }
+
     var dateError by remember { mutableStateOf<String?>(null) }
 
-    val availableForms = forms.filter { it.remainingQuantity > 0.0 }
+    val availableForms = forms.filter {
+        it.remainingQuantity > 0.000001
+    }
+
     val selectedForms = forms.filter { it.selected }
 
     val drafts = selectedForms.mapNotNull { form ->
@@ -145,24 +197,33 @@ fun BatchPurchasingScreen(
         quantity == null ||
                 !quantity.isFinite() ||
                 quantity <= 0.0 ||
-                quantity > form.remainingQuantity ||
+                quantity > form.remainingQuantity + 0.000001 ||
                 price == null ||
                 price < 0L
     }
 
     val noMedicineSelected = selectedForms.isEmpty()
+
     val canSave =
         !isSaving &&
                 !noMedicineSelected &&
                 !quantityOrPriceInvalid &&
                 dateError == null &&
-                purchaseDate.isNotBlank() &&
+                validateIsoDate(purchaseDate) == null &&
                 drafts.size == selectedForms.size
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Batch Purchasing") },
+                title = {
+                    Text(
+                        if (isEditing) {
+                            "Edit Purchase Batch #${editingBatch!!.batch.id}"
+                        } else {
+                            "Batch Purchasing"
+                        }
+                    )
+                },
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,
@@ -198,6 +259,14 @@ fun BatchPurchasingScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                if (isEditing) {
+                    Text(
+                        text = "Editing a saved transaction. Changes will replace this batch rather than create a new one.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
@@ -227,7 +296,11 @@ fun BatchPurchasingScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Select the medicines purchased in this batch.",
+                    text = if (isEditing) {
+                        "Update the medicines, quantities, and actual prices in this batch."
+                    } else {
+                        "Select the medicines purchased in this batch."
+                    },
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -253,7 +326,7 @@ fun BatchPurchasingScreen(
                     items = forms,
                     key = { _, form -> form.medicine.id }
                 ) { index, form ->
-                    if (form.remainingQuantity > 0.0) {
+                    if (form.remainingQuantity > 0.000001) {
                         val medicine = form.medicine
                         val quantity = form.quantityText.toDoubleOrNull()
                         val priceCentavos =
@@ -271,18 +344,19 @@ fun BatchPurchasingScreen(
                                 "Quantity must be greater than zero."
 
                             form.selected && quantity != null &&
-                                    quantity > form.remainingQuantity ->
-                                "Cannot exceed the remaining quantity."
+                                    quantity > form.remainingQuantity + 0.000001 ->
+                                "Cannot exceed the available quantity."
 
                             else -> null
                         }
 
                         val priceError = when {
                             form.selected &&
-                                    parseMoneyToCentavos(form.unitPriceText) == null ->
+                                    priceCentavos == null ->
                                 "Enter a valid price with up to 2 decimal places."
 
-                            form.selected && priceCentavos != null &&
+                            form.selected &&
+                                    priceCentavos != null &&
                                     priceCentavos < 0L ->
                                 "Price cannot be negative."
 
@@ -345,7 +419,11 @@ fun BatchPurchasingScreen(
                                         )
 
                                         Text(
-                                            text = "Remaining: ${formatQuantity(form.remainingQuantity)} ${medicine.unit}",
+                                            text = "Available for this ${if (isEditing) "edit" else "purchase"}: ${
+                                                formatQuantity(
+                                                    form.remainingQuantity
+                                                )
+                                            } ${medicine.unit}",
                                             style = MaterialTheme.typography.bodyMedium
                                         )
 
@@ -384,12 +462,10 @@ fun BatchPurchasingScreen(
                                         )
                                     },
                                     label = { Text("Quantity to purchase") },
-                                    placeholder = {
-                                        Text("e.g. 10")
-                                    },
+                                    placeholder = { Text("e.g. 10") },
                                     supportingText = {
                                         Text(
-                                            "Maximum available: ${formatQuantity(form.remainingQuantity)} ${medicine.unit}"
+                                            "Maximum: ${formatQuantity(form.remainingQuantity)} ${medicine.unit}"
                                         )
                                     },
                                     isError = quantityError != null,
@@ -424,7 +500,7 @@ fun BatchPurchasingScreen(
                                     placeholder = { Text("e.g. 12.50") },
                                     supportingText = {
                                         Text(
-                                            "Enter the price actually paid per ${medicine.unit}."
+                                            "Enter the actual price paid per ${medicine.unit}."
                                         )
                                     },
                                     isError = priceError != null,
@@ -516,7 +592,11 @@ fun BatchPurchasingScreen(
                         )
 
                         Text(
-                            text = "The actual unit prices entered above will be saved with this batch.",
+                            text = if (isEditing) {
+                                "Saving will replace the contents of this batch."
+                            } else {
+                                "Actual unit prices will be saved with this batch."
+                            },
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -553,11 +633,20 @@ fun BatchPurchasingScreen(
                             !quantityOrPriceInvalid &&
                             drafts.size == selectedForms.size
                         ) {
-                            onSave(
-                                purchaseDate.trim(),
-                                notes.trim(),
-                                drafts
-                            )
+                            if (editingBatch != null) {
+                                onUpdate(
+                                    editingBatch.batch.id,
+                                    purchaseDate.trim(),
+                                    notes.trim(),
+                                    drafts
+                                )
+                            } else {
+                                onSave(
+                                    purchaseDate.trim(),
+                                    notes.trim(),
+                                    drafts
+                                )
+                            }
                         }
                     },
                     enabled = canSave,
@@ -573,9 +662,15 @@ fun BatchPurchasingScreen(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Saving purchase...")
+                        Text(
+                            if (isEditing) "Updating purchase..."
+                            else "Saving purchase..."
+                        )
                     } else {
-                        Text("Save Purchase Batch")
+                        Text(
+                            if (isEditing) "Save Changes"
+                            else "Save Purchase Batch"
+                        )
                     }
                 }
 

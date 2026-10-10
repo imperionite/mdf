@@ -10,13 +10,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class PurchaseUiState(
     val isSaving: Boolean = false,
     val savedBatchId: Long? = null,
+    val deletedBatchId: Long? = null,
     val errorMessage: String? = null
 )
 
@@ -34,7 +34,6 @@ class PrescriptionDetailsViewModel(
                 repository.observePrescriptionDetails(id)
             }
         }
-        .map { it }
 
     private val _purchaseState = MutableStateFlow(PurchaseUiState())
     val purchaseState: StateFlow<PurchaseUiState> =
@@ -75,6 +74,58 @@ class PrescriptionDetailsViewModel(
         }
     }
 
+    fun updatePurchase(
+        batchId: Long,
+        purchaseDate: String,
+        notes: String,
+        items: List<PurchaseItemDraft>
+    ) {
+        if (_purchaseState.value.isSaving) return
+
+        viewModelScope.launch {
+            _purchaseState.value = PurchaseUiState(isSaving = true)
+
+            try {
+                repository.updatePurchaseBatch(
+                    batchId = batchId,
+                    purchaseDate = purchaseDate,
+                    notes = notes,
+                    items = items
+                )
+
+                _purchaseState.value = PurchaseUiState(
+                    savedBatchId = batchId
+                )
+            } catch (exception: Exception) {
+                _purchaseState.value = PurchaseUiState(
+                    errorMessage = exception.message
+                        ?: "Unable to update this purchase."
+                )
+            }
+        }
+    }
+
+    fun deletePurchase(batchId: Long) {
+        if (_purchaseState.value.isSaving) return
+
+        viewModelScope.launch {
+            _purchaseState.value = PurchaseUiState(isSaving = true)
+
+            try {
+                repository.deletePurchaseBatch(batchId)
+
+                _purchaseState.value = PurchaseUiState(
+                    deletedBatchId = batchId
+                )
+            } catch (exception: Exception) {
+                _purchaseState.value = PurchaseUiState(
+                    errorMessage = exception.message
+                        ?: "Unable to delete this purchase."
+                )
+            }
+        }
+    }
+
     fun clearPurchaseMessage() {
         _purchaseState.update { PurchaseUiState() }
     }
@@ -82,11 +133,17 @@ class PrescriptionDetailsViewModel(
     class Factory(
         private val repository: PurchaseRepository
     ) : ViewModelProvider.Factory {
+
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            require(modelClass.isAssignableFrom(
-                PrescriptionDetailsViewModel::class.java
-            ))
+        override fun <T : ViewModel> create(
+            modelClass: Class<T>
+        ): T {
+            require(
+                modelClass.isAssignableFrom(
+                    PrescriptionDetailsViewModel::class.java
+                )
+            )
+
             return PrescriptionDetailsViewModel(repository) as T
         }
     }

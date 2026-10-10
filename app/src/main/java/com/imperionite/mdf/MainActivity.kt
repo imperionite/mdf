@@ -1,7 +1,5 @@
 package com.imperionite.mdf
 
-
-
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -25,9 +23,9 @@ import com.imperionite.mdf.ui.prescriptions.BatchPurchasingScreen
 import com.imperionite.mdf.ui.prescriptions.CreatePrescriptionScreen
 import com.imperionite.mdf.ui.prescriptions.PrescriptionDetailsScreen
 import com.imperionite.mdf.ui.prescriptions.PrescriptionListScreen
+import com.imperionite.mdf.viewmodel.PrescriptionDetailsViewModel
 import com.imperionite.mdf.viewmodel.PrescriptionListViewModel
 import com.imperionite.mdf.viewmodel.PrescriptionListViewModelFactory
-import com.imperionite.mdf.viewmodel.PrescriptionDetailsViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -85,7 +83,12 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf<Long?>(null)
             }
 
-            // Used to return to Prescription Details after editing from there.
+            // Non-null only when editing an existing purchase batch.
+            var editingPurchaseBatchId by remember {
+                mutableStateOf<Long?>(null)
+            }
+
+            // Return to details after editing a prescription from its details.
             var returnToDetailsAfterEdit by remember {
                 mutableStateOf(false)
             }
@@ -123,6 +126,7 @@ class MainActivity : ComponentActivity() {
             fun openPrescription(prescriptionId: Long) {
                 selectedPrescriptionId = prescriptionId
                 showBatchPurchasing = false
+                editingPurchaseBatchId = null
                 detailsViewModel.loadPrescription(prescriptionId)
                 detailsViewModel.clearPurchaseMessage()
             }
@@ -140,11 +144,10 @@ class MainActivity : ComponentActivity() {
                         onRemoveAttachment = {
                             selectedAttachment = null
                         },
-                        onSave = {
-                                physicianName,
-                                prescriptionDate,
-                                notes,
-                                medicines ->
+                        onSave = { physicianName,
+                                   prescriptionDate,
+                                   notes,
+                                   medicines ->
 
                             if (!isSavingPrescription) {
                                 isSavingPrescription = true
@@ -156,8 +159,6 @@ class MainActivity : ComponentActivity() {
                                     editingPrescription = null
                                     selectedAttachment = null
                                     saveError = null
-                                    // selectedPrescriptionId is intentionally
-                                    // retained when editing from Details.
                                     returnToDetailsAfterEdit = false
                                 }
 
@@ -214,8 +215,20 @@ class MainActivity : ComponentActivity() {
 
                 showBatchPurchasing && selectedPrescriptionId != null -> {
                     val currentDetails = details
+                    val batchId = editingPurchaseBatchId
 
-                    if (currentDetails == null) {
+                    val editingBatch = if (batchId != null) {
+                        currentDetails?.purchaseBatches?.firstOrNull {
+                            it.batch.id == batchId
+                        }
+                    } else {
+                        null
+                    }
+
+                    if (
+                        currentDetails == null ||
+                        (batchId != null && editingBatch == null)
+                    ) {
                         CircularProgressIndicator()
                     } else {
                         BatchPurchasingScreen(
@@ -223,11 +236,14 @@ class MainActivity : ComponentActivity() {
                             physicianName = currentDetails.prescription
                                 .prescription.physicianName,
                             medicines = currentDetails.prescription.medicines,
-                            purchasedQuantities = currentDetails.purchasedQuantities,
+                            purchasedQuantities =
+                                currentDetails.purchasedQuantities,
                             isSaving = purchaseState.isSaving,
                             errorMessage = purchaseState.errorMessage,
+                            editingBatch = editingBatch,
                             onBack = {
                                 showBatchPurchasing = false
+                                editingPurchaseBatchId = null
                                 detailsViewModel.clearPurchaseMessage()
                             },
                             onSave = { date, notes, items ->
@@ -237,13 +253,28 @@ class MainActivity : ComponentActivity() {
                                     notes = notes,
                                     items = items
                                 )
+                            },
+                            onUpdate = { id, date, notes, items ->
+                                detailsViewModel.updatePurchase(
+                                    batchId = id,
+                                    purchaseDate = date,
+                                    notes = notes,
+                                    items = items
+                                )
                             }
                         )
                     }
 
-                    LaunchedEffect(purchaseState.savedBatchId) {
-                        if (purchaseState.savedBatchId != null) {
+                    LaunchedEffect(
+                        purchaseState.savedBatchId,
+                        purchaseState.deletedBatchId
+                    ) {
+                        if (
+                            purchaseState.savedBatchId != null ||
+                            purchaseState.deletedBatchId != null
+                        ) {
                             showBatchPurchasing = false
+                            editingPurchaseBatchId = null
                             detailsViewModel.clearPurchaseMessage()
                         }
                     }
@@ -260,6 +291,7 @@ class MainActivity : ComponentActivity() {
                             onBack = {
                                 selectedPrescriptionId = null
                                 showBatchPurchasing = false
+                                editingPurchaseBatchId = null
                                 detailsViewModel.clearPurchaseMessage()
                             },
                             onEdit = {
@@ -275,8 +307,17 @@ class MainActivity : ComponentActivity() {
                                 showCreateForm = true
                             },
                             onNewPurchase = {
+                                editingPurchaseBatchId = null
                                 detailsViewModel.clearPurchaseMessage()
                                 showBatchPurchasing = true
+                            },
+                            onEditBatch = { batchId ->
+                                editingPurchaseBatchId = batchId
+                                detailsViewModel.clearPurchaseMessage()
+                                showBatchPurchasing = true
+                            },
+                            onDeleteBatch = { batchId ->
+                                detailsViewModel.deletePurchase(batchId)
                             }
                         )
                     }

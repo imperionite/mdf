@@ -17,6 +17,11 @@ interface PurchaseBatchItemDao {
     )
 
     @Query(
+        "DELETE FROM purchase_batch_items WHERE purchaseBatchId = :batchId"
+    )
+    suspend fun deleteByBatchId(batchId: Long)
+
+    @Query(
         """
         SELECT
             pm.id AS medicineId,
