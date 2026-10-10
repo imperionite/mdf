@@ -21,6 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.OutlinedButton
+
 import com.imperionite.mdf.data.local.entity.PrescriptionMedicineEntity
 import com.imperionite.mdf.data.repository.PrescriptionDetails
 import java.math.BigDecimal
@@ -49,6 +55,10 @@ fun PrescriptionDetailsScreen(
 
     var batchPendingDeletion by remember {
         mutableStateOf<Long?>(null)
+    }
+
+    var showAttachmentPreview by remember {
+        mutableStateOf(false)
     }
 
     if (batchPendingDeletion != null) {
@@ -111,10 +121,23 @@ fun PrescriptionDetailsScreen(
                 }
 
                 if (prescription.attachmentUri != null) {
-                    Text(
-                        "Prescription attachment is saved.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    OutlinedButton(
+                        onClick = {
+                            showAttachmentPreview = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("View Doctor's Prescription")
+                    }
+
+                    if (showAttachmentPreview) {
+                        PrescriptionAttachmentPreviewDialog(
+                            uri = prescription.attachmentUri!!,
+                            onDismiss = {
+                                showAttachmentPreview = false
+                            }
+                        )
+                    }
                 }
             }
         }
