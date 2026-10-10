@@ -15,7 +15,7 @@ import com.imperionite.mdf.data.local.entity.PrescriptionMedicineEntity
         PrescriptionEntity::class,
         PrescriptionMedicineEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -51,6 +51,17 @@ abstract class AppDatabase : RoomDatabase() {
                     CREATE INDEX IF NOT EXISTS
                     index_prescription_medicines_prescriptionId
                     ON prescription_medicines(prescriptionId)
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    ALTER TABLE prescription_medicines
+                    RENAME COLUMN frequency TO dosageRegimen
                     """.trimIndent()
                 )
             }

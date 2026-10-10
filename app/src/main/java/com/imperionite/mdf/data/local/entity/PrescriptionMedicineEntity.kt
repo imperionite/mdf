@@ -32,8 +32,8 @@ data class PrescriptionMedicineEntity(
 
     val dosage: String,
 
-    val frequency: String,
+    val dosageRegimen: String,
 
-    // Store money as integer centavos to avoid floating-point price errors.
+    // Store currency in integer centavos.
     val unitPriceCentavos: Long
 )

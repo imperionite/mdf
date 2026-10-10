@@ -38,15 +38,14 @@ import java.util.Locale
 fun PrescriptionListScreen(
     prescriptions: List<PrescriptionWithMedicines>,
     onCreatePrescription: () -> Unit,
+    onEditPrescription: (PrescriptionWithMedicines) -> Unit,
     onDeletePrescription: (PrescriptionEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = { Text("Prescriptions") }
-            )
+            TopAppBar(title = { Text("Prescriptions") })
         },
         floatingActionButton = {
             Button(onClick = onCreatePrescription) {
@@ -74,13 +73,11 @@ fun PrescriptionListScreen(
                     text = "No prescriptions yet",
                     style = MaterialTheme.typography.titleLarge
                 )
-
                 Text(
                     text = "Your saved prescriptions will appear here.",
                     modifier = Modifier.padding(top = 8.dp),
                     style = MaterialTheme.typography.bodyMedium
                 )
-
                 Button(
                     onClick = onCreatePrescription,
                     modifier = Modifier.padding(top = 16.dp)
@@ -98,7 +95,7 @@ fun PrescriptionListScreen(
             ) {
                 items(
                     items = prescriptions,
-                    key = { item -> item.prescription.id }
+                    key = { it.prescription.id }
                 ) { item ->
                     val prescription = item.prescription
 
@@ -138,21 +135,20 @@ fun PrescriptionListScreen(
                                         text = medicine.medicineName,
                                         style = MaterialTheme.typography.titleSmall
                                     )
-
                                     Text(
                                         text = "Prescribed: ${medicine.prescribedQuantity} ${medicine.unit}",
                                         style = MaterialTheme.typography.bodySmall
                                     )
-
                                     Text(
-                                        text = "Dosage: ${medicine.dosage} · Frequency: ${medicine.frequency}",
+                                        text = "Dosage: ${medicine.dosage}",
                                         style = MaterialTheme.typography.bodySmall
                                     )
-
                                     Text(
-                                        text = "Unit price: ${
-                                            formatPrice(medicine.unitPriceCentavos)
-                                        }",
+                                        text = "Dosage regimen: ${medicine.dosageRegimen}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        text = "Unit price: ${formatPrice(medicine.unitPriceCentavos)}",
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
@@ -180,12 +176,18 @@ fun PrescriptionListScreen(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 OutlinedButton(
-                                    onClick = {
-                                        onDeletePrescription(prescription)
-                                    }
+                                    onClick = { onEditPrescription(item) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Edit")
+                                }
+
+                                OutlinedButton(
+                                    onClick = { onDeletePrescription(prescription) },
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     Text("Delete")
                                 }
@@ -199,26 +201,19 @@ fun PrescriptionListScreen(
 }
 
 private fun formatPrice(centavos: Long): String {
-    val formatter = NumberFormat.getCurrencyInstance(
-        Locale("en", "PH")
-    )
-    return formatter.format(centavos / 100.0)
+    return NumberFormat
+        .getCurrencyInstance(Locale("en", "PH"))
+        .format(centavos / 100.0)
 }
 
-/*
- * Preview-only state.
- * The empty list does not create or save database records.
- */
-@Preview(
-    showBackground = true,
-    showSystemUi = true
-)
+@Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun PrescriptionListScreenPreview() {
     MaterialTheme {
         PrescriptionListScreen(
             prescriptions = emptyList(),
             onCreatePrescription = {},
+            onEditPrescription = {},
             onDeletePrescription = {}
         )
     }
