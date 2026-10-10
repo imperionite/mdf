@@ -1,5 +1,6 @@
-
 package com.imperionite.mdf.ui.prescriptions
+
+import androidx.compose.material3.Icon
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -40,16 +41,19 @@ fun PrescriptionListScreen(
     onCreatePrescription: () -> Unit,
     onEditPrescription: (PrescriptionWithMedicines) -> Unit,
     onDeletePrescription: (PrescriptionEntity) -> Unit,
+    onOpenDetails: (PrescriptionWithMedicines) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(title = { Text("Prescriptions") })
+            TopAppBar(
+                title = { Text("Prescriptions") }
+            )
         },
         floatingActionButton = {
             Button(onClick = onCreatePrescription) {
-                androidx.compose.material3.Icon(
+                Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = null
                 )
@@ -73,11 +77,13 @@ fun PrescriptionListScreen(
                     text = "No prescriptions yet",
                     style = MaterialTheme.typography.titleLarge
                 )
+
                 Text(
                     text = "Your saved prescriptions will appear here.",
                     modifier = Modifier.padding(top = 8.dp),
                     style = MaterialTheme.typography.bodyMedium
                 )
+
                 Button(
                     onClick = onCreatePrescription,
                     modifier = Modifier.padding(top = 16.dp)
@@ -135,18 +141,22 @@ fun PrescriptionListScreen(
                                         text = medicine.medicineName,
                                         style = MaterialTheme.typography.titleSmall
                                     )
+
                                     Text(
                                         text = "Prescribed: ${medicine.prescribedQuantity} ${medicine.unit}",
                                         style = MaterialTheme.typography.bodySmall
                                     )
+
                                     Text(
                                         text = "Dosage: ${medicine.dosage}",
                                         style = MaterialTheme.typography.bodySmall
                                     )
+
                                     Text(
                                         text = "Dosage regimen: ${medicine.dosageRegimen}",
                                         style = MaterialTheme.typography.bodySmall
                                     )
+
                                     Text(
                                         text = "Unit price: ${formatPrice(medicine.unitPriceCentavos)}",
                                         style = MaterialTheme.typography.bodySmall
@@ -156,6 +166,7 @@ fun PrescriptionListScreen(
 
                             if (prescription.notes.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(8.dp))
+
                                 Text(
                                     text = "Notes: ${prescription.notes}",
                                     style = MaterialTheme.typography.bodyMedium
@@ -179,18 +190,29 @@ fun PrescriptionListScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 OutlinedButton(
+                                    onClick = { onOpenDetails(item) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("View Details")
+                                }
+
+                                OutlinedButton(
                                     onClick = { onEditPrescription(item) },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text("Edit")
                                 }
+                            }
 
-                                OutlinedButton(
-                                    onClick = { onDeletePrescription(prescription) },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Delete")
-                                }
+                            OutlinedButton(
+                                onClick = {
+                                    onDeletePrescription(prescription)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp)
+                            ) {
+                                Text("Delete")
                             }
                         }
                     }
@@ -214,7 +236,8 @@ private fun PrescriptionListScreenPreview() {
             prescriptions = emptyList(),
             onCreatePrescription = {},
             onEditPrescription = {},
-            onDeletePrescription = {}
+            onDeletePrescription = {},
+            onOpenDetails = {}
         )
     }
 }
