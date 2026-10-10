@@ -15,9 +15,12 @@ object DatabaseProvider {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "prescription_database"
-            ).build().also { database ->
-                INSTANCE = database
-            }
+            )
+                .addMigrations(AppDatabase.MIGRATION_1_2)
+                .build()
+                .also { database ->
+                    INSTANCE = database
+                }
         }
     }
 }

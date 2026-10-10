@@ -1,6 +1,7 @@
 
 package com.imperionite.mdf
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -14,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imperionite.mdf.data.local.DatabaseProvider
+import com.imperionite.mdf.data.model.PrescriptionMedicineDraft
 import com.imperionite.mdf.data.repository.PrescriptionRepository
 import com.imperionite.mdf.ui.prescriptions.CreatePrescriptionScreen
 import com.imperionite.mdf.ui.prescriptions.PrescriptionListScreen
@@ -26,9 +28,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val database = DatabaseProvider.getDatabase(applicationContext)
+
         val repository = PrescriptionRepository(
-            database.prescriptionDao()
+            database = database,
+            prescriptionDao = database.prescriptionDao(),
+            medicineDao = database.prescriptionMedicineDao()
         )
+
         val factory = PrescriptionListViewModelFactory(repository)
 
         setContent {
@@ -39,21 +45,10 @@ class MainActivity : ComponentActivity() {
             val prescriptions by prescriptionViewModel.prescriptions
                 .collectAsState()
 
-            var showCreateForm by remember {
-                mutableStateOf(false)
-            }
-
-            var selectedAttachment by remember {
-                mutableStateOf<Uri?>(null)
-            }
-
-            var isSaving by remember {
-                mutableStateOf(false)
-            }
-
-            var saveError by remember {
-                mutableStateOf<String?>(null)
-            }
+            var showCreateForm by remember { mutableStateOf(false) }
+            var selectedAttachment by remember { mutableStateOf<Uri?>(null) }
+            var isSaving by remember { mutableStateOf(false) }
+            var saveError by remember { mutableStateOf<String?>(null) }
 
             val attachmentPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument()
@@ -62,11 +57,10 @@ class MainActivity : ComponentActivity() {
                     try {
                         contentResolver.takePersistableUriPermission(
                             uri,
-                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
                         )
                     } catch (_: SecurityException) {
-                        // Keep the URI for this session even if persistent
-                        // permission cannot be acquired.
+                        // The URI may still work during the current session.
                     }
 
                     selectedAttachment = uri
@@ -85,7 +79,7 @@ class MainActivity : ComponentActivity() {
                     onRemoveAttachment = {
                         selectedAttachment = null
                     },
-                    onSave = { physicianName, prescriptionDate, notes ->
+                    onSave = { physicianName, prescriptionDate, notes, medicines ->
                         if (!isSaving) {
                             isSaving = true
                             saveError = null
@@ -95,6 +89,7 @@ class MainActivity : ComponentActivity() {
                                 prescriptionDate = prescriptionDate,
                                 notes = notes,
                                 attachmentUri = selectedAttachment?.toString(),
+                                medicines = medicines,
                                 onSaved = {
                                     isSaving = false
                                     showCreateForm = false
@@ -109,9 +104,11 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onCancel = {
-                        showCreateForm = false
-                        selectedAttachment = null
-                        saveError = null
+                        if (!isSaving) {
+                            showCreateForm = false
+                            selectedAttachment = null
+                            saveError = null
+                        }
                     },
                     isSaving = isSaving,
                     errorMessage = saveError
@@ -121,6 +118,7 @@ class MainActivity : ComponentActivity() {
                     prescriptions = prescriptions,
                     onCreatePrescription = {
                         saveError = null
+                        selectedAttachment = null
                         showCreateForm = true
                     },
                     onDeletePrescription = { prescription ->

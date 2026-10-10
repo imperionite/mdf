@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,11 +29,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.imperionite.mdf.data.local.entity.PrescriptionEntity
+import com.imperionite.mdf.data.local.entity.PrescriptionWithMedicines
+import java.text.NumberFormat
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrescriptionListScreen(
-    prescriptions: List<PrescriptionEntity>,
+    prescriptions: List<PrescriptionWithMedicines>,
     onCreatePrescription: () -> Unit,
     onDeletePrescription: (PrescriptionEntity) -> Unit,
     modifier: Modifier = Modifier
@@ -41,9 +45,7 @@ fun PrescriptionListScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = {
-                    Text("Prescriptions")
-                }
+                title = { Text("Prescriptions") }
             )
         },
         floatingActionButton = {
@@ -96,8 +98,10 @@ fun PrescriptionListScreen(
             ) {
                 items(
                     items = prescriptions,
-                    key = { prescription -> prescription.id }
-                ) { prescription ->
+                    key = { item -> item.prescription.id }
+                ) { item ->
+                    val prescription = item.prescription
+
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         elevation = CardDefaults.cardElevation(
@@ -118,11 +122,47 @@ fun PrescriptionListScreen(
                                 modifier = Modifier.padding(top = 4.dp)
                             )
 
+                            Text(
+                                text = "Medicines: ${item.medicines.size}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+
+                            item.medicines.forEach { medicine ->
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp)
+                                ) {
+                                    Text(
+                                        text = medicine.medicineName,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+
+                                    Text(
+                                        text = "Prescribed: ${medicine.prescribedQuantity} ${medicine.unit}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+
+                                    Text(
+                                        text = "Dosage: ${medicine.dosage} · Frequency: ${medicine.frequency}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+
+                                    Text(
+                                        text = "Unit price: ${
+                                            formatPrice(medicine.unitPriceCentavos)
+                                        }",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+
                             if (prescription.notes.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = prescription.notes,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(top = 8.dp)
+                                    text = "Notes: ${prescription.notes}",
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
 
@@ -158,10 +198,16 @@ fun PrescriptionListScreen(
     }
 }
 
+private fun formatPrice(centavos: Long): String {
+    val formatter = NumberFormat.getCurrencyInstance(
+        Locale("en", "PH")
+    )
+    return formatter.format(centavos / 100.0)
+}
+
 /*
  * Preview-only state.
- * An empty list means no fake prescription is displayed.
- * This function does not connect to Room or save anything.
+ * The empty list does not create or save database records.
  */
 @Preview(
     showBackground = true,

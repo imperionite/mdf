@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+NOTE.md
+*.zip
