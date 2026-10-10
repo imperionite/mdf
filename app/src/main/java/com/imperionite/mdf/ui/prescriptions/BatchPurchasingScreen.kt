@@ -3,43 +3,58 @@ package com.imperionite.mdf.ui.prescriptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.imperionite.mdf.data.local.entity.PrescriptionMedicineEntity
 import com.imperionite.mdf.data.repository.PurchaseItemDraft
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.text.NumberFormat
 import java.time.LocalDate
+import java.text.NumberFormat
 import java.util.Locale
 
 private data class PurchaseMedicineForm(
     val medicine: PrescriptionMedicineEntity,
     val remainingQuantity: Double,
-    var selected: Boolean = false,
-    var quantityText: String = "",
-    var priceText: String = ""
+    val selected: Boolean = false,
+    val quantityText: String = "",
+    val unitPriceText: String = ""
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BatchPurchasingScreen(
     prescriptionId: Long,
@@ -49,22 +64,37 @@ fun BatchPurchasingScreen(
     isSaving: Boolean,
     errorMessage: String?,
     onBack: () -> Unit,
-    onSave: (purchaseDate: String, notes: String, items: List<PurchaseItemDraft>) -> Unit
+    onSave: (
+        purchaseDate: String,
+        notes: String,
+        items: List<PurchaseItemDraft>
+    ) -> Unit
 ) {
-    val forms = remember(prescriptionId, medicines, purchasedQuantities) {
+    val currencyFormatter = remember {
+        NumberFormat.getCurrencyInstance(
+            Locale.Builder()
+                .setLanguage("en")
+                .setRegion("PH")
+                .build()
+        )
+    }
+
+    val forms = remember(medicines, purchasedQuantities) {
         mutableStateListOf<PurchaseMedicineForm>().apply {
             medicines.forEach { medicine ->
                 val purchased = purchasedQuantities[medicine.id] ?: 0.0
-                val remaining = (medicine.prescribedQuantity - purchased)
-                    .coerceAtLeast(0.0)
+                val remaining =
+                    (medicine.prescribedQuantity - purchased).coerceAtLeast(0.0)
 
                 add(
                     PurchaseMedicineForm(
                         medicine = medicine,
                         remainingQuantity = remaining,
-                        priceText = BigDecimal.valueOf(
-                            medicine.unitPriceCentavos, 2
-                        ).toPlainString()
+                        selected = false,
+                        quantityText = "",
+                        unitPriceText = centsToMoneyText(
+                            medicine.unitPriceCentavos
+                        )
                     )
                 )
             }
@@ -73,239 +103,523 @@ fun BatchPurchasingScreen(
 
     var purchaseDate by remember { mutableStateOf(LocalDate.now().toString()) }
     var notes by remember { mutableStateOf("") }
-    var validationMessage by remember { mutableStateOf<String?>(null) }
+    var dateError by remember { mutableStateOf<String?>(null) }
 
+    val availableForms = forms.filter { it.remainingQuantity > 0.0 }
     val selectedForms = forms.filter { it.selected }
 
-    val estimatedTotalCentavos = selectedForms.sumOf { form ->
-        val quantity = form.quantityText.toDoubleOrNull() ?: 0.0
-        val price = parseMoneyToCentavos(form.priceText) ?: 0L
-        (quantity * price).toLong()
+    val drafts = selectedForms.mapNotNull { form ->
+        val quantity = form.quantityText.toDoubleOrNull()
+        val priceCentavos = parseMoneyToCentavos(form.unitPriceText)
+
+        if (
+            quantity != null &&
+            quantity.isFinite() &&
+            quantity > 0.0 &&
+            priceCentavos != null &&
+            priceCentavos >= 0L
+        ) {
+            PurchaseItemDraft(
+                prescriptionMedicineId = form.medicine.id,
+                purchasedQuantity = quantity,
+                unitPriceCentavos = priceCentavos
+            )
+        } else {
+            null
+        }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = "Batch Purchasing",
-            style = MaterialTheme.typography.headlineSmall
-        )
-        Text("Prescription for: $physicianName")
+    val estimatedTotalCentavos = drafts.fold(0L) { total, draft ->
+        val itemTotal = BigDecimal.valueOf(draft.purchasedQuantity)
+            .multiply(BigDecimal.valueOf(draft.unitPriceCentavos))
+            .setScale(0, RoundingMode.HALF_UP)
+            .longValueExact()
 
-        OutlinedTextField(
-            value = purchaseDate,
-            onValueChange = {
-                purchaseDate = it
-                validationMessage = null
-            },
-            label = { Text("Purchase date (YYYY-MM-DD)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+        Math.addExact(total, itemTotal)
+    }
 
-        Text(
-            text = "Select the medicines included in this purchase.",
-            style = MaterialTheme.typography.bodyMedium
-        )
+    val quantityOrPriceInvalid = selectedForms.any { form ->
+        val quantity = form.quantityText.toDoubleOrNull()
+        val price = parseMoneyToCentavos(form.unitPriceText)
 
-        forms.forEachIndexed { index, form ->
-            key(form.medicine.id) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+        quantity == null ||
+                !quantity.isFinite() ||
+                quantity <= 0.0 ||
+                quantity > form.remainingQuantity ||
+                price == null ||
+                price < 0L
+    }
+
+    val noMedicineSelected = selectedForms.isEmpty()
+    val canSave =
+        !isSaving &&
+                !noMedicineSelected &&
+                !quantityOrPriceInvalid &&
+                dateError == null &&
+                purchaseDate.isNotBlank() &&
+                drafts.size == selectedForms.size
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Batch Purchasing") },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onBack,
+                        enabled = !isSaving
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = form.selected,
-                                onCheckedChange = { checked ->
-                                    forms[index] = form.copy(selected = checked)
-                                    validationMessage = null
-                                },
-                                enabled = form.remainingQuantity > 0.000001
-                            )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    form.medicine.medicineName,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    "Remaining: ${form.remainingQuantity} " +
-                                            form.medicine.unit
-                                )
-                            }
+                Text(
+                    text = "Physician: $physicianName",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Text(
+                    text = "Prescription ID: $prescriptionId",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = purchaseDate,
+                    onValueChange = {
+                        purchaseDate = it
+                        dateError = validateIsoDate(it)
+                    },
+                    label = { Text("Purchase date (YYYY-MM-DD)") },
+                    supportingText = {
+                        Text("Enter the actual date of this purchase.")
+                    },
+                    isError = dateError != null,
+                    enabled = !isSaving,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (dateError != null) {
+                    Text(
+                        text = dateError.orEmpty(),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Select the medicines purchased in this batch.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            if (availableForms.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor =
+                                MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Text(
+                            text = "There are no remaining prescribed quantities available to purchase.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            } else {
+                itemsIndexed(
+                    items = forms,
+                    key = { _, form -> form.medicine.id }
+                ) { index, form ->
+                    if (form.remainingQuantity > 0.0) {
+                        val medicine = form.medicine
+                        val quantity = form.quantityText.toDoubleOrNull()
+                        val priceCentavos =
+                            parseMoneyToCentavos(form.unitPriceText)
+
+                        val quantityError = when {
+                            form.selected && form.quantityText.isBlank() ->
+                                "Enter the quantity to purchase."
+
+                            form.selected && quantity == null ->
+                                "Enter a valid numeric quantity."
+
+                            form.selected && quantity != null &&
+                                    (!quantity.isFinite() || quantity <= 0.0) ->
+                                "Quantity must be greater than zero."
+
+                            form.selected && quantity != null &&
+                                    quantity > form.remainingQuantity ->
+                                "Cannot exceed the remaining quantity."
+
+                            else -> null
                         }
 
-                        Text("Dosage/strength: ${form.medicine.dosage}")
-                        Text("Regimen: ${form.medicine.dosageRegimen}")
+                        val priceError = when {
+                            form.selected &&
+                                    parseMoneyToCentavos(form.unitPriceText) == null ->
+                                "Enter a valid price with up to 2 decimal places."
 
-                        if (form.remainingQuantity <= 0.000001) {
-                            Text("This medicine has been fully purchased.")
-                        } else {
-                            OutlinedTextField(
-                                value = form.quantityText,
-                                onValueChange = { newValue ->
-                                    forms[index] = form.copy(
-                                        quantityText = newValue
-                                    )
-                                    validationMessage = null
-                                },
-                                label = {
-                                    Text("Quantity to purchase (${form.medicine.unit})")
-                                },
-                                supportingText = {
-                                    Text("Maximum: ${form.remainingQuantity}")
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
+                            form.selected && priceCentavos != null &&
+                                    priceCentavos < 0L ->
+                                "Price cannot be negative."
 
-                            OutlinedTextField(
-                                value = form.priceText,
-                                onValueChange = { newValue ->
-                                    forms[index] = form.copy(
-                                        priceText = newValue
+                            else -> null
+                        }
+
+                        val subtotalCentavos =
+                            if (
+                                form.selected &&
+                                quantity != null &&
+                                quantity.isFinite() &&
+                                quantity > 0.0 &&
+                                priceCentavos != null &&
+                                priceCentavos >= 0L
+                            ) {
+                                BigDecimal.valueOf(quantity)
+                                    .multiply(
+                                        BigDecimal.valueOf(priceCentavos)
                                     )
-                                    validationMessage = null
-                                },
-                                label = { Text("Actual unit price (₱)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
+                                    .setScale(0, RoundingMode.HALF_UP)
+                                    .longValueExact()
+                            } else {
+                                0L
+                            }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor =
+                                    MaterialTheme.colorScheme.surface
                             )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement =
+                                    Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment =
+                                        Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = form.selected,
+                                        onCheckedChange = { checked ->
+                                            forms[index] = form.copy(
+                                                selected = checked
+                                            )
+                                        },
+                                        enabled = !isSaving
+                                    )
+
+                                    Spacer(modifier = Modifier.width(4.dp))
+
+                                    Column(
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = medicine.medicineName,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+
+                                        Text(
+                                            text = "Remaining: ${formatQuantity(form.remainingQuantity)} ${medicine.unit}",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+
+                                        Text(
+                                            text = "Prescribed: ${formatQuantity(medicine.prescribedQuantity)} ${medicine.unit}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                if (medicine.dosageRegimen.isNotBlank()) {
+                                    Text(
+                                        text = "Dosage regimen: ${medicine.dosageRegimen}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+
+                                Text(
+                                    text = "Original unit price: ${
+                                        currencyFormatter.format(
+                                            medicine.unitPriceCentavos / 100.0
+                                        )
+                                    }",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                OutlinedTextField(
+                                    value = form.quantityText,
+                                    onValueChange = { value ->
+                                        forms[index] = form.copy(
+                                            quantityText = value.filter {
+                                                it.isDigit() || it == '.'
+                                            }
+                                        )
+                                    },
+                                    label = { Text("Quantity to purchase") },
+                                    placeholder = {
+                                        Text("e.g. 10")
+                                    },
+                                    supportingText = {
+                                        Text(
+                                            "Maximum available: ${formatQuantity(form.remainingQuantity)} ${medicine.unit}"
+                                        )
+                                    },
+                                    isError = quantityError != null,
+                                    enabled = !isSaving && form.selected,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal
+                                    ),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                if (quantityError != null) {
+                                    Text(
+                                        text = quantityError,
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = form.unitPriceText,
+                                    onValueChange = { value ->
+                                        forms[index] = form.copy(
+                                            unitPriceText = value.filter {
+                                                it.isDigit() || it == '.'
+                                            }
+                                        )
+                                    },
+                                    label = {
+                                        Text("Actual unit price (₱)")
+                                    },
+                                    placeholder = { Text("e.g. 12.50") },
+                                    supportingText = {
+                                        Text(
+                                            "Enter the price actually paid per ${medicine.unit}."
+                                        )
+                                    },
+                                    isError = priceError != null,
+                                    enabled = !isSaving && form.selected,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal
+                                    ),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                if (priceError != null) {
+                                    Text(
+                                        text = priceError,
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+
+                                HorizontalDivider()
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement =
+                                        Arrangement.SpaceBetween,
+                                    verticalAlignment =
+                                        Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Subtotal",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+
+                                    Text(
+                                        text = currencyFormatter.format(
+                                            subtotalCentavos / 100.0
+                                        ),
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
 
-        OutlinedTextField(
-            value = notes,
-            onValueChange = { notes = it },
-            label = { Text("Purchase notes (optional)") },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 2
-        )
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text("Selected medicines: ${selectedForms.size}")
-                Text(
-                    text = "Estimated batch total: ${formatCentavos(estimatedTotalCentavos)}",
-                    style = MaterialTheme.typography.titleMedium
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Purchase notes (optional)") },
+                    placeholder = {
+                        Text("e.g. Partial purchase, receipt details")
+                    },
+                    enabled = !isSaving,
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Text(
-                    "The saved total uses each item's recorded quantity and unit-price snapshot."
-                )
-            }
-        }
 
-        validationMessage?.let {
-            Text(it, color = MaterialTheme.colorScheme.error)
-        }
+                Spacer(modifier = Modifier.height(8.dp))
 
-        errorMessage?.let {
-            Text(it, color = MaterialTheme.colorScheme.error)
-        }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor =
+                            MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Purchase Summary",
+                            style = MaterialTheme.typography.titleMedium
+                        )
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = onBack,
-                enabled = !isSaving,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Cancel")
-            }
+                        Text("Selected medicines: ${selectedForms.size}")
 
-            Button(
-                onClick = {
-                    val parsedDate = runCatching {
-                        LocalDate.parse(purchaseDate)
-                    }.getOrNull()
+                        Text(
+                            text = "Estimated total: ${
+                                currencyFormatter.format(
+                                    estimatedTotalCentavos / 100.0
+                                )
+                            }",
+                            style = MaterialTheme.typography.headlineSmall
+                        )
 
-                    if (parsedDate == null) {
-                        validationMessage =
-                            "Enter a valid date in YYYY-MM-DD format."
-                        return@Button
-                    }
-
-                    if (selectedForms.isEmpty()) {
-                        validationMessage =
-                            "Select at least one medicine."
-                        return@Button
-                    }
-
-                    val drafts = mutableListOf<PurchaseItemDraft>()
-
-                    for (form in selectedForms) {
-                        val quantity = form.quantityText.toDoubleOrNull()
-                        val priceCentavos = parseMoneyToCentavos(form.priceText)
-
-                        if (quantity == null || !quantity.isFinite() || quantity <= 0.0) {
-                            validationMessage =
-                                "Enter a valid positive quantity for ${form.medicine.medicineName}."
-                            return@Button
-                        }
-
-                        if (quantity > form.remainingQuantity + 0.000001) {
-                            validationMessage =
-                                "Quantity for ${form.medicine.medicineName} exceeds the remaining quantity."
-                            return@Button
-                        }
-
-                        if (priceCentavos == null || priceCentavos < 0L) {
-                            validationMessage =
-                                "Enter a valid price with no more than two decimal places for ${form.medicine.medicineName}."
-                            return@Button
-                        }
-
-                        drafts.add(
-                            PurchaseItemDraft(
-                                prescriptionMedicineId = form.medicine.id,
-                                purchasedQuantity = quantity,
-                                unitPriceCentavos = priceCentavos
-                            )
+                        Text(
+                            text = "The actual unit prices entered above will be saved with this batch.",
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
+                }
 
-                    validationMessage = null
-                    onSave(purchaseDate, notes, drafts)
-                },
-                enabled = !isSaving,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(if (isSaving) "Saving..." else "Save Purchase")
+                if (noMedicineSelected) {
+                    Text(
+                        text = "Select at least one medicine and enter its purchase quantity.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        val validDate = validateIsoDate(purchaseDate)
+                        dateError = validDate
+
+                        if (
+                            validDate == null &&
+                            !noMedicineSelected &&
+                            !quantityOrPriceInvalid &&
+                            drafts.size == selectedForms.size
+                        ) {
+                            onSave(
+                                purchaseDate.trim(),
+                                notes.trim(),
+                                drafts
+                            )
+                        }
+                    },
+                    enabled = canSave,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .height(20.dp)
+                                .width(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Saving purchase...")
+                    } else {
+                        Text("Save Purchase Batch")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 }
 
 private fun parseMoneyToCentavos(value: String): Long? {
+    val trimmed = value.trim()
+
+    if (trimmed.isEmpty()) return null
+    if (!trimmed.matches(Regex("""\d+(\.\d{0,2})?"""))) return null
+
     return try {
-        val amount = BigDecimal(value.trim())
-        if (amount.scale() > 2) {
-            null
-        } else {
-            amount
-                .setScale(2, RoundingMode.UNNECESSARY)
-                .movePointRight(2)
-                .longValueExact()
-        }
+        BigDecimal(trimmed)
+            .setScale(2, RoundingMode.UNNECESSARY)
+            .movePointRight(2)
+            .longValueExact()
     } catch (_: Exception) {
         null
     }
 }
 
-private fun formatCentavos(centavos: Long): String {
-    return NumberFormat.getCurrencyInstance(Locale("en", "PH"))
-        .format(centavos / 100.0)
+private fun centsToMoneyText(centavos: Long): String {
+    return BigDecimal.valueOf(centavos, 2).toPlainString()
+}
+
+private fun formatQuantity(quantity: Double): String {
+    return BigDecimal.valueOf(quantity)
+        .stripTrailingZeros()
+        .toPlainString()
+}
+
+private fun validateIsoDate(value: String): String? {
+    return try {
+        val parsed = LocalDate.parse(value.trim())
+        if (parsed.toString() != value.trim()) {
+            "Use the date format YYYY-MM-DD."
+        } else {
+            null
+        }
+    } catch (_: Exception) {
+        "Enter a valid date in YYYY-MM-DD format."
+    }
 }
