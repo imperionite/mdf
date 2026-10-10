@@ -1,0 +1,133 @@
+
+package com.imperionite.mdf
+
+import android.net.Uri
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.imperionite.mdf.data.local.DatabaseProvider
+import com.imperionite.mdf.data.repository.PrescriptionRepository
+import com.imperionite.mdf.ui.prescriptions.CreatePrescriptionScreen
+import com.imperionite.mdf.ui.prescriptions.PrescriptionListScreen
+import com.imperionite.mdf.viewmodel.PrescriptionListViewModel
+import com.imperionite.mdf.viewmodel.PrescriptionListViewModelFactory
+
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        val database = DatabaseProvider.getDatabase(applicationContext)
+        val repository = PrescriptionRepository(
+            database.prescriptionDao()
+        )
+        val factory = PrescriptionListViewModelFactory(repository)
+
+        setContent {
+            val prescriptionViewModel: PrescriptionListViewModel = viewModel(
+                factory = factory
+            )
+
+            val prescriptions by prescriptionViewModel.prescriptions
+                .collectAsState()
+
+            var showCreateForm by remember {
+                mutableStateOf(false)
+            }
+
+            var selectedAttachment by remember {
+                mutableStateOf<Uri?>(null)
+            }
+
+            var isSaving by remember {
+                mutableStateOf(false)
+            }
+
+            var saveError by remember {
+                mutableStateOf<String?>(null)
+            }
+
+            val attachmentPicker = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                if (uri != null) {
+                    try {
+                        contentResolver.takePersistableUriPermission(
+                            uri,
+                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: SecurityException) {
+                        // Keep the URI for this session even if persistent
+                        // permission cannot be acquired.
+                    }
+
+                    selectedAttachment = uri
+                    saveError = null
+                }
+            }
+
+            if (showCreateForm) {
+                CreatePrescriptionScreen(
+                    attachmentUri = selectedAttachment?.toString(),
+                    onChooseAttachment = {
+                        attachmentPicker.launch(
+                            arrayOf("application/pdf", "image/*")
+                        )
+                    },
+                    onRemoveAttachment = {
+                        selectedAttachment = null
+                    },
+                    onSave = { physicianName, prescriptionDate, notes ->
+                        if (!isSaving) {
+                            isSaving = true
+                            saveError = null
+
+                            prescriptionViewModel.addPrescription(
+                                physicianName = physicianName,
+                                prescriptionDate = prescriptionDate,
+                                notes = notes,
+                                attachmentUri = selectedAttachment?.toString(),
+                                onSaved = {
+                                    isSaving = false
+                                    showCreateForm = false
+                                    selectedAttachment = null
+                                    saveError = null
+                                },
+                                onError = { message ->
+                                    isSaving = false
+                                    saveError = message
+                                }
+                            )
+                        }
+                    },
+                    onCancel = {
+                        showCreateForm = false
+                        selectedAttachment = null
+                        saveError = null
+                    },
+                    isSaving = isSaving,
+                    errorMessage = saveError
+                )
+            } else {
+                PrescriptionListScreen(
+                    prescriptions = prescriptions,
+                    onCreatePrescription = {
+                        saveError = null
+                        showCreateForm = true
+                    },
+                    onDeletePrescription = { prescription ->
+                        prescriptionViewModel.deletePrescription(prescription)
+                    }
+                )
+            }
+        }
+    }
+}
