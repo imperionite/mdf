@@ -35,4 +35,8 @@ interface PrescriptionDao {
 
     @Delete
     suspend fun delete(prescription: PrescriptionEntity)
+
+    @Transaction
+    @Query("SELECT * FROM prescriptions WHERE id = :id")
+    fun observeById(id: Long): Flow<PrescriptionWithMedicines?>
 }
