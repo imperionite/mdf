@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.imperionite.mdf.data.local.entity.PrescriptionWithMedicines
 import com.imperionite.mdf.data.model.PrescriptionMedicineDraft
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -40,16 +41,18 @@ private val displayDateFormatter =
     DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault())
 
 private data class MedicineFormState(
+    val id: Long? = null,
     val medicineName: String = "",
     val prescribedQuantity: String = "",
     val unit: String = "",
     val dosage: String = "",
-    val frequency: String = "",
+    val dosageRegimen: String = "",
     val unitPrice: String = ""
 )
 
 @Composable
 fun CreatePrescriptionScreen(
+    initialPrescription: PrescriptionWithMedicines?,
     attachmentUri: String?,
     onChooseAttachment: () -> Unit,
     onRemoveAttachment: () -> Unit,
@@ -63,16 +66,54 @@ fun CreatePrescriptionScreen(
     isSaving: Boolean,
     errorMessage: String?
 ) {
-    var physicianName by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-    var physicianError by remember { mutableStateOf(false) }
+    val existing = initialPrescription
 
-    var medicineForms by remember {
-        mutableStateOf(listOf(MedicineFormState()))
+    var physicianName by remember(existing?.prescription?.id) {
+        mutableStateOf(existing?.prescription?.physicianName.orEmpty())
     }
 
-    var formError by remember { mutableStateOf<String?>(null) }
+    var notes by remember(existing?.prescription?.id) {
+        mutableStateOf(existing?.prescription?.notes.orEmpty())
+    }
+
+    var selectedDate by remember(existing?.prescription?.id) {
+        mutableStateOf(
+            runCatching {
+                LocalDate.parse(
+                    existing?.prescription?.prescriptionDate
+                        ?: LocalDate.now().format(storageDateFormatter),
+                    storageDateFormatter
+                )
+            }.getOrDefault(LocalDate.now())
+        )
+    }
+
+    var physicianError by remember(existing?.prescription?.id) {
+        mutableStateOf(false)
+    }
+
+    var medicineForms by remember(existing?.prescription?.id) {
+        mutableStateOf(
+            existing?.medicines?.map { medicine ->
+                MedicineFormState(
+                    id = medicine.id,
+                    medicineName = medicine.medicineName,
+                    prescribedQuantity = medicine.prescribedQuantity.toString(),
+                    unit = medicine.unit,
+                    dosage = medicine.dosage,
+                    dosageRegimen = medicine.dosageRegimen,
+                    unitPrice = BigDecimal.valueOf(
+                        medicine.unitPriceCentavos,
+                        2
+                    ).toPlainString()
+                )
+            } ?: listOf(MedicineFormState())
+        )
+    }
+
+    var formError by remember(existing?.prescription?.id) {
+        mutableStateOf<String?>(null)
+    }
 
     val context = LocalContext.current
 
@@ -85,61 +126,57 @@ fun CreatePrescriptionScreen(
         val drafts = mutableListOf<PrescriptionMedicineDraft>()
 
         for ((index, medicine) in medicineForms.withIndex()) {
-            val rowNumber = index + 1
+            val row = index + 1
 
             if (medicine.medicineName.isBlank()) {
-                formError = "Enter the name of medicine #$rowNumber."
+                formError = "Enter the name of medicine #$row."
                 return null
             }
 
             val quantity = medicine.prescribedQuantity.toDoubleOrNull()
-
             if (quantity == null || !quantity.isFinite() || quantity <= 0.0) {
-                formError =
-                    "Enter a valid quantity greater than zero for medicine #$rowNumber."
+                formError = "Enter a valid quantity greater than zero for medicine #$row."
                 return null
             }
 
             if (medicine.unit.isBlank()) {
-                formError = "Enter the unit for medicine #$rowNumber."
+                formError = "Enter the unit for medicine #$row."
                 return null
             }
 
             if (medicine.dosage.isBlank()) {
-                formError = "Enter the dosage for medicine #$rowNumber."
+                formError = "Enter the dosage or strength for medicine #$row."
                 return null
             }
 
-            if (medicine.frequency.isBlank()) {
-                formError = "Enter the frequency for medicine #$rowNumber."
+            if (medicine.dosageRegimen.isBlank()) {
+                formError = "Enter the dosage regimen for medicine #$row."
                 return null
             }
 
-            val priceText = medicine.unitPrice.trim()
             val priceCentavos = try {
-                BigDecimal(priceText)
+                BigDecimal(medicine.unitPrice.trim())
                     .setScale(2, RoundingMode.UNNECESSARY)
                     .movePointRight(2)
                     .longValueExact()
             } catch (_: Exception) {
-                formError =
-                    "Enter a valid unit price with up to two decimal places for medicine #$rowNumber."
+                formError = "Enter a valid unit price with up to two decimal places for medicine #$row."
                 return null
             }
 
             if (priceCentavos < 0) {
-                formError =
-                    "Unit price cannot be negative for medicine #$rowNumber."
+                formError = "Unit price cannot be negative for medicine #$row."
                 return null
             }
 
             drafts.add(
                 PrescriptionMedicineDraft(
+                    id = medicine.id,
                     medicineName = medicine.medicineName.trim(),
                     prescribedQuantity = quantity,
                     unit = medicine.unit.trim(),
                     dosage = medicine.dosage.trim(),
-                    frequency = medicine.frequency.trim(),
+                    dosageRegimen = medicine.dosageRegimen.trim(),
                     unitPriceCentavos = priceCentavos
                 )
             )
@@ -156,7 +193,7 @@ fun CreatePrescriptionScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "New Prescription",
+            text = if (existing == null) "New Prescription" else "Edit Prescription",
             style = MaterialTheme.typography.headlineSmall
         )
 
@@ -171,10 +208,9 @@ fun CreatePrescriptionScreen(
             singleLine = true,
             isError = physicianError,
             supportingText = {
-                if (physicianError) {
-                    Text("Enter the physician's name.")
-                }
-            }
+                if (physicianError) Text("Enter the physician's name.")
+            },
+            enabled = !isSaving
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -185,11 +221,7 @@ fun CreatePrescriptionScreen(
                     DatePickerDialog(
                         context,
                         { _, year, month, day ->
-                            selectedDate = LocalDate.of(
-                                year,
-                                month + 1,
-                                day
-                            )
+                            selectedDate = LocalDate.of(year, month + 1, day)
                         },
                         selectedDate.year,
                         selectedDate.monthValue - 1,
@@ -255,16 +287,14 @@ fun CreatePrescriptionScreen(
         )
 
         Text(
-            text = "Add each medicine listed on the prescription. Fields marked * are required.",
+            text = "Keep the regimen as written on the prescription, such as 1-0-1. Do not infer duration from this notation.",
             style = MaterialTheme.typography.bodyMedium
         )
 
         medicineForms.forEachIndexed { index, medicine ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(
-                    defaultElevation = 1.dp
-                )
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
@@ -282,10 +312,9 @@ fun CreatePrescriptionScreen(
                         if (medicineForms.size > 1) {
                             TextButton(
                                 onClick = {
-                                    medicineForms = medicineForms
-                                        .filterIndexed { rowIndex, _ ->
-                                            rowIndex != index
-                                        }
+                                    medicineForms = medicineForms.filterIndexed {
+                                            rowIndex, _ -> rowIndex != index
+                                    }
                                     formError = null
                                 },
                                 enabled = !isSaving
@@ -313,9 +342,7 @@ fun CreatePrescriptionScreen(
                         value = medicine.prescribedQuantity,
                         onValueChange = { value ->
                             medicineForms = medicineForms.toMutableList().also {
-                                it[index] = medicine.copy(
-                                    prescribedQuantity = value
-                                )
+                                it[index] = medicine.copy(prescribedQuantity = value)
                             }
                             formError = null
                         },
@@ -339,7 +366,7 @@ fun CreatePrescriptionScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Unit *") },
-                        placeholder = { Text("e.g. tablet, capsule, mL") },
+                        placeholder = { Text("tablet, capsule, mL") },
                         singleLine = true,
                         enabled = !isSaving
                     )
@@ -353,23 +380,23 @@ fun CreatePrescriptionScreen(
                             formError = null
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Dosage *") },
+                        label = { Text("Dosage / strength *") },
                         placeholder = { Text("e.g. 500 mg") },
                         singleLine = true,
                         enabled = !isSaving
                     )
 
                     OutlinedTextField(
-                        value = medicine.frequency,
+                        value = medicine.dosageRegimen,
                         onValueChange = { value ->
                             medicineForms = medicineForms.toMutableList().also {
-                                it[index] = medicine.copy(frequency = value)
+                                it[index] = medicine.copy(dosageRegimen = value)
                             }
                             formError = null
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Frequency *") },
-                        placeholder = { Text("e.g. twice daily") },
+                        label = { Text("Dosage regimen (schedule) *") },
+                        placeholder = { Text("e.g. 1-0-1 or 0-0-1") },
                         singleLine = true,
                         enabled = !isSaving
                     )
@@ -408,17 +435,15 @@ fun CreatePrescriptionScreen(
 
         if (!formError.isNullOrBlank()) {
             Text(
-                text = formError!!,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium
+                text = formError.orEmpty(),
+                color = MaterialTheme.colorScheme.error
             )
         }
 
         if (!errorMessage.isNullOrBlank()) {
             Text(
-                text = errorMessage,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium
+                text = errorMessage.orEmpty(),
+                color = MaterialTheme.colorScheme.error
             )
         }
 
@@ -436,16 +461,13 @@ fun CreatePrescriptionScreen(
 
             Button(
                 onClick = {
-                    val trimmedName = physicianName.trim()
-
-                    if (trimmedName.isBlank()) {
+                    if (physicianName.isBlank()) {
                         physicianError = true
                     } else {
                         val drafts = buildMedicineDrafts()
-
                         if (drafts != null) {
                             onSave(
-                                trimmedName,
+                                physicianName.trim(),
                                 selectedDate.format(storageDateFormatter),
                                 notes.trim(),
                                 drafts

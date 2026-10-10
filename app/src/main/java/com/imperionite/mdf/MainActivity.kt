@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imperionite.mdf.data.local.DatabaseProvider
+import com.imperionite.mdf.data.local.entity.PrescriptionWithMedicines
 import com.imperionite.mdf.data.model.PrescriptionMedicineDraft
 import com.imperionite.mdf.data.repository.PrescriptionRepository
 import com.imperionite.mdf.ui.prescriptions.CreatePrescriptionScreen
@@ -46,6 +47,9 @@ class MainActivity : ComponentActivity() {
                 .collectAsState()
 
             var showCreateForm by remember { mutableStateOf(false) }
+            var editingPrescription by remember {
+                mutableStateOf<PrescriptionWithMedicines?>(null)
+            }
             var selectedAttachment by remember { mutableStateOf<Uri?>(null) }
             var isSaving by remember { mutableStateOf(false) }
             var saveError by remember { mutableStateOf<String?>(null) }
@@ -60,7 +64,7 @@ class MainActivity : ComponentActivity() {
                             Intent.FLAG_GRANT_READ_URI_PERMISSION
                         )
                     } catch (_: SecurityException) {
-                        // The URI may still work during the current session.
+                        // The URI may still work during this session.
                     }
 
                     selectedAttachment = uri
@@ -70,6 +74,7 @@ class MainActivity : ComponentActivity() {
 
             if (showCreateForm) {
                 CreatePrescriptionScreen(
+                    initialPrescription = editingPrescription,
                     attachmentUri = selectedAttachment?.toString(),
                     onChooseAttachment = {
                         attachmentPicker.launch(
@@ -84,28 +89,50 @@ class MainActivity : ComponentActivity() {
                             isSaving = true
                             saveError = null
 
-                            prescriptionViewModel.addPrescription(
-                                physicianName = physicianName,
-                                prescriptionDate = prescriptionDate,
-                                notes = notes,
-                                attachmentUri = selectedAttachment?.toString(),
-                                medicines = medicines,
-                                onSaved = {
-                                    isSaving = false
-                                    showCreateForm = false
-                                    selectedAttachment = null
-                                    saveError = null
-                                },
-                                onError = { message ->
-                                    isSaving = false
-                                    saveError = message
-                                }
-                            )
+                            val onSaved: () -> Unit = {
+                                isSaving = false
+                                showCreateForm = false
+                                editingPrescription = null
+                                selectedAttachment = null
+                                saveError = null
+                            }
+
+                            val onError: (String) -> Unit = { message ->
+                                isSaving = false
+                                saveError = message
+                            }
+
+                            val attachment = selectedAttachment?.toString()
+
+                            if (editingPrescription == null) {
+                                prescriptionViewModel.addPrescription(
+                                    physicianName = physicianName,
+                                    prescriptionDate = prescriptionDate,
+                                    notes = notes,
+                                    attachmentUri = attachment,
+                                    medicines = medicines,
+                                    onSaved = onSaved,
+                                    onError = onError
+                                )
+                            } else {
+                                prescriptionViewModel.updatePrescription(
+                                    prescriptionId = editingPrescription!!
+                                        .prescription.id,
+                                    physicianName = physicianName,
+                                    prescriptionDate = prescriptionDate,
+                                    notes = notes,
+                                    attachmentUri = attachment,
+                                    medicines = medicines,
+                                    onSaved = onSaved,
+                                    onError = onError
+                                )
+                            }
                         }
                     },
                     onCancel = {
                         if (!isSaving) {
                             showCreateForm = false
+                            editingPrescription = null
                             selectedAttachment = null
                             saveError = null
                         }
@@ -117,8 +144,16 @@ class MainActivity : ComponentActivity() {
                 PrescriptionListScreen(
                     prescriptions = prescriptions,
                     onCreatePrescription = {
-                        saveError = null
+                        editingPrescription = null
                         selectedAttachment = null
+                        saveError = null
+                        showCreateForm = true
+                    },
+                    onEditPrescription = { item ->
+                        editingPrescription = item
+                        selectedAttachment = item.prescription.attachmentUri
+                            ?.let(Uri::parse)
+                        saveError = null
                         showCreateForm = true
                     },
                     onDeletePrescription = { prescription ->

@@ -27,24 +27,7 @@ class PrescriptionRepository(
         attachmentUri: String? = null,
         medicines: List<PrescriptionMedicineDraft>
     ): Long {
-        require(physicianName.isNotBlank()) {
-            "Physician name is required."
-        }
-
-        require(medicines.isNotEmpty()) {
-            "Add at least one medicine."
-        }
-
-        require(medicines.all {
-            it.medicineName.isNotBlank() &&
-                    it.prescribedQuantity > 0 &&
-                    it.unit.isNotBlank() &&
-                    it.dosage.isNotBlank() &&
-                    it.frequency.isNotBlank() &&
-                    it.unitPriceCentavos >= 0
-        }) {
-            "Check the medicine details and try again."
-        }
+        validatePrescription(physicianName, medicines)
 
         return database.withTransaction {
             val prescriptionId = prescriptionDao.insert(
@@ -57,24 +40,114 @@ class PrescriptionRepository(
             )
 
             val medicineEntities = medicines.map { medicine ->
-                PrescriptionMedicineEntity(
-                    prescriptionId = prescriptionId,
-                    medicineName = medicine.medicineName.trim(),
-                    prescribedQuantity = medicine.prescribedQuantity,
-                    unit = medicine.unit.trim(),
-                    dosage = medicine.dosage.trim(),
-                    frequency = medicine.frequency.trim(),
-                    unitPriceCentavos = medicine.unitPriceCentavos
-                )
+                medicine.toEntity(prescriptionId)
             }
 
             medicineDao.insertAll(medicineEntities)
-
             prescriptionId
+        }
+    }
+
+    suspend fun updatePrescriptionWithMedicines(
+        prescriptionId: Long,
+        physicianName: String,
+        prescriptionDate: String,
+        notes: String,
+        attachmentUri: String?,
+        medicines: List<PrescriptionMedicineDraft>
+    ) {
+        validatePrescription(physicianName, medicines)
+
+        database.withTransaction {
+            val existingPrescription = prescriptionDao.getById(prescriptionId)
+                ?: throw IllegalArgumentException("Prescription not found.")
+
+            val existingMedicines =
+                medicineDao.getByPrescriptionId(prescriptionId)
+
+            val existingById = existingMedicines.associateBy { it.id }
+            val retainedIds = mutableSetOf<Long>()
+
+            prescriptionDao.update(
+                existingPrescription.copy(
+                    physicianName = physicianName.trim(),
+                    prescriptionDate = prescriptionDate,
+                    notes = notes.trim(),
+                    attachmentUri = attachmentUri
+                )
+            )
+
+            medicines.forEach { draft ->
+                val draftId = draft.id
+
+                if (draftId != null) {
+                    val existingMedicine = existingById[draftId]
+                        ?: throw IllegalArgumentException(
+                            "A medicine does not belong to this prescription."
+                        )
+
+                    retainedIds.add(draftId)
+
+                    medicineDao.update(
+                        draft.toEntity(prescriptionId).copy(
+                            id = existingMedicine.id
+                        )
+                    )
+                } else {
+                    medicineDao.insert(
+                        draft.toEntity(prescriptionId)
+                    )
+                }
+            }
+
+            existingMedicines
+                .filterNot { it.id in retainedIds }
+                .forEach { medicine ->
+                    medicineDao.delete(medicine)
+                }
         }
     }
 
     suspend fun deletePrescription(prescription: PrescriptionEntity) {
         prescriptionDao.delete(prescription)
+    }
+
+    private fun validatePrescription(
+        physicianName: String,
+        medicines: List<PrescriptionMedicineDraft>
+    ) {
+        require(physicianName.isNotBlank()) {
+            "Physician name is required."
+        }
+
+        require(medicines.isNotEmpty()) {
+            "Add at least one medicine."
+        }
+
+        require(medicines.all { medicine ->
+            medicine.medicineName.isNotBlank() &&
+                medicine.prescribedQuantity > 0.0 &&
+                medicine.prescribedQuantity.isFinite() &&
+                medicine.unit.isNotBlank() &&
+                medicine.dosage.isNotBlank() &&
+                medicine.dosageRegimen.isNotBlank() &&
+                medicine.unitPriceCentavos >= 0
+        }) {
+            "Check the medicine details and try again."
+        }
+    }
+
+    private fun PrescriptionMedicineDraft.toEntity(
+        prescriptionId: Long
+    ): PrescriptionMedicineEntity {
+        return PrescriptionMedicineEntity(
+            prescriptionId = prescriptionId,
+            medicineName = medicineName.trim(),
+            prescribedQuantity = prescribedQuantity,
+            unit = unit.trim(),
+            dosage = dosage.trim(),
+            dosageRegimen = dosageRegimen.trim(),
+            unitPriceCentavos = unitPriceCentavos
+        )
     }
 }

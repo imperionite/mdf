@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.imperionite.mdf.data.local.entity.PrescriptionEntity
+import com.imperionite.mdf.data.local.entity.PrescriptionWithMedicines
 import com.imperionite.mdf.data.model.PrescriptionMedicineDraft
 import com.imperionite.mdf.data.repository.PrescriptionRepository
 import kotlinx.coroutines.Dispatchers
@@ -43,12 +44,43 @@ class PrescriptionListViewModel(
                         medicines = medicines
                     )
                 }
-
                 onSaved()
             } catch (exception: Exception) {
                 onError(
                     exception.localizedMessage
                         ?: "Unable to save the prescription."
+                )
+            }
+        }
+    }
+
+    fun updatePrescription(
+        prescriptionId: Long,
+        physicianName: String,
+        prescriptionDate: String,
+        notes: String,
+        attachmentUri: String?,
+        medicines: List<PrescriptionMedicineDraft>,
+        onSaved: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.updatePrescriptionWithMedicines(
+                        prescriptionId = prescriptionId,
+                        physicianName = physicianName,
+                        prescriptionDate = prescriptionDate,
+                        notes = notes,
+                        attachmentUri = attachmentUri,
+                        medicines = medicines
+                    )
+                }
+                onSaved()
+            } catch (exception: Exception) {
+                onError(
+                    exception.localizedMessage
+                        ?: "Unable to update the prescription."
                 )
             }
         }
@@ -61,8 +93,7 @@ class PrescriptionListViewModel(
                     repository.deletePrescription(prescription)
                 }
             } catch (_: Exception) {
-                // A dedicated error state can be added when delete
-                // confirmation and feedback are implemented.
+                // Delete error feedback can be added with confirmation UI.
             }
         }
     }
