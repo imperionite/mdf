@@ -293,6 +293,9 @@ fun CreatePrescriptionScreen(
         medicineForms.forEachIndexed { index, medicine ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(

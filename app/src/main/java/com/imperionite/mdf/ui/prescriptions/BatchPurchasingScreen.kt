@@ -304,7 +304,7 @@ fun BatchPurchasingScreen(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
                             containerColor =
-                                MaterialTheme.colorScheme.surfaceVariant
+                                MaterialTheme.colorScheme.secondaryContainer
                         )
                     ) {
                         Text(

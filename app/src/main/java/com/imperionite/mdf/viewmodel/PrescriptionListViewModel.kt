@@ -93,15 +93,25 @@ class PrescriptionListViewModel(
         }
     }
 
-    fun deletePrescription(prescription: PrescriptionEntity) {
+    fun deletePrescription(
+        prescription: PrescriptionEntity,
+        onDeleted: () -> Unit,
+        onError: (String) -> Unit
+    ) {
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
                     repository.deletePrescription(prescription)
                 }
-            } catch (_: Exception) {
-                ensureActive()
-                // Delete error feedback can be added with confirmation UI.
+                onDeleted()
+            } catch (exception: Exception) {
+                if (exception is CancellationException) {
+                    ensureActive()
+                }
+                onError(
+                    exception.localizedMessage
+                        ?: "Unable to delete the prescription."
+                )
             }
         }
     }

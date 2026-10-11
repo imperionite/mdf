@@ -1,54 +1,72 @@
 package com.imperionite.mdf.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+import androidx.compose.ui.graphics.Color
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = MdfTeal,
+    onPrimary = MdfInk,
+    primaryContainer = MdfPaleBlue,
+    onPrimaryContainer = MdfInk,
+    secondary = MdfBlueGray,
+    onSecondary = MdfInk,
+    secondaryContainer = MdfLightGray,
+    onSecondaryContainer = MdfInk,
+    tertiary = MdfPowderBlue,
+    onTertiary = MdfInk,
+    tertiaryContainer = MdfPaleBlue,
+    onTertiaryContainer = MdfInk,
+    error = MdfError,
+    onError = MdfWhite,
+    background = MdfLightGray,
+    onBackground = MdfInk,
+    surface = MdfWhite,
+    onSurface = MdfInk,
+    surfaceVariant = MdfLightGray,
+    onSurfaceVariant = MdfMutedInk,
+    outline = MdfBlueGray,
+    outlineVariant = MdfBlueGray.copy(alpha = 0.55f),
+    surfaceTint = MdfTeal
 )
+
+private val DarkColorScheme = darkColorScheme(
+    primary = MdfTeal,
+    onPrimary = MdfInk,
+    primaryContainer = Color(0xFF34515B),
+    onPrimaryContainer = MdfDarkText,
+    secondary = MdfBlueGray,
+    onSecondary = MdfInk,
+    secondaryContainer = MdfDarkSurfaceVariant,
+    onSecondaryContainer = MdfDarkText,
+    tertiary = MdfPowderBlue,
+    onTertiary = MdfInk,
+    tertiaryContainer = MdfDarkSurfaceVariant,
+    onTertiaryContainer = MdfDarkText,
+    error = MdfDarkError,
+    onError = MdfDarkBackground,
+    background = MdfDarkBackground,
+    onBackground = MdfDarkText,
+    surface = MdfDarkSurface,
+    onSurface = MdfDarkText,
+    surfaceVariant = MdfDarkSurfaceVariant,
+    onSurfaceVariant = MdfDarkMutedText,
+    outline = MdfBlueGray,
+    outlineVariant = MdfDarkSurfaceVariant,
+    surfaceTint = MdfTeal
+)
+
 
 @Composable
 fun MDFTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    // Use MDF's own palette in both modes rather than Android wallpaper colors.
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,
