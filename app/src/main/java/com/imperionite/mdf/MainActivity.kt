@@ -7,6 +7,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.imperionite.mdf.ui.theme.MDFTheme
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,299 +67,360 @@ class MainActivity : ComponentActivity() {
             PrescriptionDetailsViewModel.Factory(purchaseRepository)
 
         setContent {
-            val prescriptionViewModel: PrescriptionListViewModel = viewModel(
-                factory = prescriptionFactory
-            )
+            MDFTheme {
+                val snackbarHostState = remember { SnackbarHostState() }
+                val coroutineScope = rememberCoroutineScope()
 
-            val detailsViewModel: PrescriptionDetailsViewModel = viewModel(
-                factory = detailsFactory
-            )
+                val prescriptionViewModel: PrescriptionListViewModel = viewModel(
+                    factory = prescriptionFactory
+                )
 
-            val prescriptions by prescriptionViewModel.prescriptions
-                .collectAsState()
+                val detailsViewModel: PrescriptionDetailsViewModel = viewModel(
+                    factory = detailsFactory
+                )
 
-            val details by detailsViewModel.details.collectAsState(
-                initial = null
-            )
+                val prescriptions by prescriptionViewModel.prescriptions
+                    .collectAsState()
 
-            val purchaseState by detailsViewModel.purchaseState.collectAsState()
+                val details by detailsViewModel.details.collectAsState(
+                    initial = null
+                )
 
-            var showCreateForm by remember { mutableStateOf(false) }
-            var showBatchPurchasing by remember { mutableStateOf(false) }
+                val purchaseState by detailsViewModel.purchaseState.collectAsState()
 
-            var editingPrescription by remember {
-                mutableStateOf<PrescriptionWithMedicines?>(null)
-            }
+                var showCreateForm by remember { mutableStateOf(false) }
+                var showBatchPurchasing by remember { mutableStateOf(false) }
 
-            var selectedPrescriptionId by remember {
-                mutableStateOf<Long?>(null)
-            }
-
-            // Non-null only when editing an existing purchase batch.
-            var editingPurchaseBatchId by remember {
-                mutableStateOf<Long?>(null)
-            }
-
-            // Return to details after editing a prescription from its details.
-            var returnToDetailsAfterEdit by remember {
-                mutableStateOf(false)
-            }
-
-            var selectedAttachment by remember {
-                mutableStateOf<Uri?>(null)
-            }
-
-            var isSavingPrescription by remember {
-                mutableStateOf(false)
-            }
-
-            var saveError by remember {
-                mutableStateOf<String?>(null)
-            }
-
-            val attachmentPicker = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.OpenDocument()
-            ) { uri ->
-                if (uri != null) {
-                    try {
-                        contentResolver.takePersistableUriPermission(
-                            uri,
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
-                    } catch (_: SecurityException) {
-                        // The URI may still work during this session.
-                    }
-
-                    selectedAttachment = uri
-                    saveError = null
-                }
-            }
-
-            fun openPrescription(prescriptionId: Long) {
-                selectedPrescriptionId = prescriptionId
-                showBatchPurchasing = false
-                editingPurchaseBatchId = null
-                detailsViewModel.loadPrescription(prescriptionId)
-                detailsViewModel.clearPurchaseMessage()
-            }
-
-            when {
-                showCreateForm -> {
-                    CreatePrescriptionScreen(
-                        initialPrescription = editingPrescription,
-                        attachmentUri = selectedAttachment?.toString(),
-                        onChooseAttachment = {
-                            attachmentPicker.launch(
-                                arrayOf("application/pdf", "image/*")
-                            )
-                        },
-                        onRemoveAttachment = {
-                            selectedAttachment = null
-                        },
-                        onSave = { physicianName,
-                                   prescriptionDate,
-                                   notes,
-                                   medicines ->
-
-                            if (!isSavingPrescription) {
-                                isSavingPrescription = true
-                                saveError = null
-
-                                val onSaved: () -> Unit = {
-                                    isSavingPrescription = false
-                                    showCreateForm = false
-                                    editingPrescription = null
-                                    selectedAttachment = null
-                                    saveError = null
-                                    returnToDetailsAfterEdit = false
-                                }
-
-                                val onError: (String) -> Unit = { message ->
-                                    isSavingPrescription = false
-                                    saveError = message
-                                }
-
-                                val attachment = selectedAttachment?.toString()
-
-                                if (editingPrescription == null) {
-                                    prescriptionViewModel.addPrescription(
-                                        physicianName = physicianName,
-                                        prescriptionDate = prescriptionDate,
-                                        notes = notes,
-                                        attachmentUri = attachment,
-                                        medicines = medicines,
-                                        onSaved = onSaved,
-                                        onError = onError
-                                    )
-                                } else {
-                                    prescriptionViewModel.updatePrescription(
-                                        prescriptionId = editingPrescription!!
-                                            .prescription.id,
-                                        physicianName = physicianName,
-                                        prescriptionDate = prescriptionDate,
-                                        notes = notes,
-                                        attachmentUri = attachment,
-                                        medicines = medicines,
-                                        onSaved = onSaved,
-                                        onError = onError
-                                    )
-                                }
-                            }
-                        },
-                        onCancel = {
-                            if (!isSavingPrescription) {
-                                showCreateForm = false
-                                editingPrescription = null
-                                selectedAttachment = null
-                                saveError = null
-
-                                if (!returnToDetailsAfterEdit) {
-                                    selectedPrescriptionId = null
-                                }
-
-                                returnToDetailsAfterEdit = false
-                            }
-                        },
-                        isSaving = isSavingPrescription,
-                        errorMessage = saveError
-                    )
+                var editingPrescription by remember {
+                    mutableStateOf<PrescriptionWithMedicines?>(null)
                 }
 
-                showBatchPurchasing && selectedPrescriptionId != null -> {
-                    val currentDetails = details
-                    val batchId = editingPurchaseBatchId
+                var selectedPrescriptionId by remember {
+                    mutableStateOf<Long?>(null)
+                }
 
-                    val editingBatch = if (batchId != null) {
-                        currentDetails?.purchaseBatches?.firstOrNull {
-                            it.batch.id == batchId
-                        }
-                    } else {
-                        null
-                    }
+                // Non-null only when editing an existing purchase batch.
+                var editingPurchaseBatchId by remember {
+                    mutableStateOf<Long?>(null)
+                }
 
-                    if (
-                        currentDetails == null ||
-                        (batchId != null && editingBatch == null)
-                    ) {
-                        CircularProgressIndicator()
-                    } else {
-                        BatchPurchasingScreen(
-                            prescriptionId = selectedPrescriptionId!!,
-                            physicianName = currentDetails.prescription
-                                .prescription.physicianName,
-                            medicines = currentDetails.prescription.medicines,
-                            purchasedQuantities =
-                                currentDetails.purchasedQuantities,
-                            isSaving = purchaseState.isSaving,
-                            errorMessage = purchaseState.errorMessage,
-                            editingBatch = editingBatch,
-                            onBack = {
-                                showBatchPurchasing = false
-                                editingPurchaseBatchId = null
-                                detailsViewModel.clearPurchaseMessage()
-                            },
-                            onSave = { date, notes, items ->
-                                detailsViewModel.savePurchase(
-                                    prescriptionId = selectedPrescriptionId!!,
-                                    purchaseDate = date,
-                                    notes = notes,
-                                    items = items
-                                )
-                            },
-                            onUpdate = { id, date, notes, items ->
-                                detailsViewModel.updatePurchase(
-                                    batchId = id,
-                                    purchaseDate = date,
-                                    notes = notes,
-                                    items = items
-                                )
+                // Return to details after editing a prescription from its details.
+                var returnToDetailsAfterEdit by remember {
+                    mutableStateOf(false)
+                }
+
+                var selectedAttachment by remember {
+                    mutableStateOf<Uri?>(null)
+                }
+
+                var isSavingPrescription by remember {
+                    mutableStateOf(false)
+                }
+
+                var saveError by remember {
+                    mutableStateOf<String?>(null)
+                }
+
+                // Keep operation feedback at the app level so it survives screen changes.
+                LaunchedEffect(
+                    purchaseState.savedBatchId,
+                    purchaseState.deletedBatchId
+                ) {
+                    when {
+                        purchaseState.savedBatchId != null -> {
+                            val message = if (editingPurchaseBatchId == null) {
+                                "Purchase batch saved successfully."
+                            } else {
+                                "Purchase batch updated successfully."
                             }
-                        )
-                    }
-
-                    LaunchedEffect(
-                        purchaseState.savedBatchId,
-                        purchaseState.deletedBatchId
-                    ) {
-                        if (
-                            purchaseState.savedBatchId != null ||
-                            purchaseState.deletedBatchId != null
-                        ) {
                             showBatchPurchasing = false
                             editingPurchaseBatchId = null
+                            snackbarHostState.showSnackbar(message)
+                            detailsViewModel.clearPurchaseMessage()
+                        }
+
+                        purchaseState.deletedBatchId != null -> {
+                            snackbarHostState.showSnackbar(
+                                "Purchase batch deleted successfully."
+                            )
                             detailsViewModel.clearPurchaseMessage()
                         }
                     }
                 }
 
-                selectedPrescriptionId != null -> {
-                    val currentDetails = details
-
-                    if (currentDetails == null) {
-                        CircularProgressIndicator()
-                    } else {
-                        PrescriptionDetailsScreen(
-                            details = currentDetails,
-                            onBack = {
-                                selectedPrescriptionId = null
-                                showBatchPurchasing = false
-                                editingPurchaseBatchId = null
-                                detailsViewModel.clearPurchaseMessage()
-                            },
-                            onEdit = {
-                                editingPrescription =
-                                    currentDetails.prescription
-
-                                selectedAttachment =
-                                    currentDetails.prescription.prescription
-                                        .attachmentUri?.let(Uri::parse)
-
-                                saveError = null
-                                returnToDetailsAfterEdit = true
-                                showCreateForm = true
-                            },
-                            onNewPurchase = {
-                                editingPurchaseBatchId = null
-                                detailsViewModel.clearPurchaseMessage()
-                                showBatchPurchasing = true
-                            },
-                            onEditBatch = { batchId ->
-                                editingPurchaseBatchId = batchId
-                                detailsViewModel.clearPurchaseMessage()
-                                showBatchPurchasing = true
-                            },
-                            onDeleteBatch = { batchId ->
-                                detailsViewModel.deletePurchase(batchId)
-                            }
-                        )
+                // Purchase-form failures remain inline; failures on the details screen
+                // (such as a failed batch deletion) are surfaced through the Snack bar.
+                LaunchedEffect(purchaseState.errorMessage, showBatchPurchasing) {
+                    val message = purchaseState.errorMessage
+                    if (message != null && !showBatchPurchasing) {
+                        snackbarHostState.showSnackbar(message)
+                        detailsViewModel.clearPurchaseMessage()
                     }
                 }
 
-                else -> {
-                    PrescriptionListScreen(
-                        prescriptions = prescriptions,
-                        onCreatePrescription = {
-                            editingPrescription = null
-                            selectedAttachment = null
-                            saveError = null
-                            returnToDetailsAfterEdit = false
-                            showCreateForm = true
-                        },
-                        onEditPrescription = { item ->
-                            editingPrescription = item
-                            selectedAttachment =
-                                item.prescription.attachmentUri?.let(Uri::parse)
-
-                            saveError = null
-                            returnToDetailsAfterEdit = false
-                            showCreateForm = true
-                        },
-                        onDeletePrescription = { prescription ->
-                            prescriptionViewModel.deletePrescription(prescription)
-                        },
-                        onOpenDetails = { item ->
-                            openPrescription(item.prescription.id)
+                val attachmentPicker = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    if (uri != null) {
+                        try {
+                            contentResolver.takePersistableUriPermission(
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        } catch (_: SecurityException) {
+                            // The URI may still work during this session.
                         }
+
+                        selectedAttachment = uri
+                        saveError = null
+                    }
+                }
+
+                fun openPrescription(prescriptionId: Long) {
+                    selectedPrescriptionId = prescriptionId
+                    showBatchPurchasing = false
+                    editingPurchaseBatchId = null
+                    detailsViewModel.loadPrescription(prescriptionId)
+                    detailsViewModel.clearPurchaseMessage()
+                }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    when {
+                        showCreateForm -> {
+                            CreatePrescriptionScreen(
+                                initialPrescription = editingPrescription,
+                                attachmentUri = selectedAttachment?.toString(),
+                                onChooseAttachment = {
+                                    attachmentPicker.launch(
+                                        arrayOf("application/pdf", "image/*")
+                                    )
+                                },
+                                onRemoveAttachment = {
+                                    selectedAttachment = null
+                                },
+                                onSave = { physicianName,
+                                           prescriptionDate,
+                                           notes,
+                                           medicines ->
+
+                                    if (!isSavingPrescription) {
+                                        isSavingPrescription = true
+                                        saveError = null
+
+                                        val successMessage = if (editingPrescription == null) {
+                                            "Prescription saved successfully."
+                                        } else {
+                                            "Prescription updated successfully."
+                                        }
+
+                                        val onSaved: () -> Unit = {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar(successMessage)
+                                            }
+                                            isSavingPrescription = false
+                                            showCreateForm = false
+                                            editingPrescription = null
+                                            selectedAttachment = null
+                                            saveError = null
+                                            returnToDetailsAfterEdit = false
+                                        }
+
+                                        val onError: (String) -> Unit = { message ->
+                                            isSavingPrescription = false
+                                            saveError = message
+                                        }
+
+                                        val attachment = selectedAttachment?.toString()
+
+                                        if (editingPrescription == null) {
+                                            prescriptionViewModel.addPrescription(
+                                                physicianName = physicianName,
+                                                prescriptionDate = prescriptionDate,
+                                                notes = notes,
+                                                attachmentUri = attachment,
+                                                medicines = medicines,
+                                                onSaved = onSaved,
+                                                onError = onError
+                                            )
+                                        } else {
+                                            prescriptionViewModel.updatePrescription(
+                                                prescriptionId = editingPrescription!!
+                                                    .prescription.id,
+                                                physicianName = physicianName,
+                                                prescriptionDate = prescriptionDate,
+                                                notes = notes,
+                                                attachmentUri = attachment,
+                                                medicines = medicines,
+                                                onSaved = onSaved,
+                                                onError = onError
+                                            )
+                                        }
+                                    }
+                                },
+                                onCancel = {
+                                    if (!isSavingPrescription) {
+                                        showCreateForm = false
+                                        editingPrescription = null
+                                        selectedAttachment = null
+                                        saveError = null
+
+                                        if (!returnToDetailsAfterEdit) {
+                                            selectedPrescriptionId = null
+                                        }
+
+                                        returnToDetailsAfterEdit = false
+                                    }
+                                },
+                                isSaving = isSavingPrescription,
+                                errorMessage = saveError
+                            )
+                        }
+
+                        showBatchPurchasing && selectedPrescriptionId != null -> {
+                            val currentDetails = details
+                            val batchId = editingPurchaseBatchId
+
+                            val editingBatch = if (batchId != null) {
+                                currentDetails?.purchaseBatches?.firstOrNull {
+                                    it.batch.id == batchId
+                                }
+                            } else {
+                                null
+                            }
+
+                            if (
+                                currentDetails == null ||
+                                (batchId != null && editingBatch == null)
+                            ) {
+                                CircularProgressIndicator()
+                            } else {
+                                BatchPurchasingScreen(
+                                    prescriptionId = selectedPrescriptionId!!,
+                                    physicianName = currentDetails.prescription
+                                        .prescription.physicianName,
+                                    medicines = currentDetails.prescription.medicines,
+                                    purchasedQuantities =
+                                        currentDetails.purchasedQuantities,
+                                    isSaving = purchaseState.isSaving,
+                                    errorMessage = purchaseState.errorMessage,
+                                    editingBatch = editingBatch,
+                                    onBack = {
+                                        showBatchPurchasing = false
+                                        editingPurchaseBatchId = null
+                                        detailsViewModel.clearPurchaseMessage()
+                                    },
+                                    onSave = { date, notes, items ->
+                                        detailsViewModel.savePurchase(
+                                            prescriptionId = selectedPrescriptionId!!,
+                                            purchaseDate = date,
+                                            notes = notes,
+                                            items = items
+                                        )
+                                    },
+                                    onUpdate = { id, date, notes, items ->
+                                        detailsViewModel.updatePurchase(
+                                            batchId = id,
+                                            purchaseDate = date,
+                                            notes = notes,
+                                            items = items
+                                        )
+                                    }
+                                )
+                            }
+
+                        }
+
+                        selectedPrescriptionId != null -> {
+                            val currentDetails = details
+
+                            if (currentDetails == null) {
+                                CircularProgressIndicator()
+                            } else {
+                                PrescriptionDetailsScreen(
+                                    details = currentDetails,
+                                    onBack = {
+                                        selectedPrescriptionId = null
+                                        showBatchPurchasing = false
+                                        editingPurchaseBatchId = null
+                                        detailsViewModel.clearPurchaseMessage()
+                                    },
+                                    onEdit = {
+                                        editingPrescription =
+                                            currentDetails.prescription
+
+                                        selectedAttachment =
+                                            currentDetails.prescription.prescription
+                                                .attachmentUri?.let(Uri::parse)
+
+                                        saveError = null
+                                        returnToDetailsAfterEdit = true
+                                        showCreateForm = true
+                                    },
+                                    onNewPurchase = {
+                                        editingPurchaseBatchId = null
+                                        detailsViewModel.clearPurchaseMessage()
+                                        showBatchPurchasing = true
+                                    },
+                                    onEditBatch = { batchId ->
+                                        editingPurchaseBatchId = batchId
+                                        detailsViewModel.clearPurchaseMessage()
+                                        showBatchPurchasing = true
+                                    },
+                                    onDeleteBatch = { batchId ->
+                                        detailsViewModel.deletePurchase(batchId)
+                                    }
+                                )
+                            }
+                        }
+
+                        else -> {
+                            PrescriptionListScreen(
+                                prescriptions = prescriptions,
+                                onCreatePrescription = {
+                                    editingPrescription = null
+                                    selectedAttachment = null
+                                    saveError = null
+                                    returnToDetailsAfterEdit = false
+                                    showCreateForm = true
+                                },
+                                onEditPrescription = { item ->
+                                    editingPrescription = item
+                                    selectedAttachment =
+                                        item.prescription.attachmentUri?.let(Uri::parse)
+
+                                    saveError = null
+                                    returnToDetailsAfterEdit = false
+                                    showCreateForm = true
+                                },
+                                onDeletePrescription = { prescription ->
+                                    prescriptionViewModel.deletePrescription(
+                                        prescription = prescription,
+                                        onDeleted = {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    "Prescription deleted successfully."
+                                                )
+                                            }
+                                        },
+                                        onError = { message ->
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar(message)
+                                            }
+                                        }
+                                    )
+                                },
+                                onOpenDetails = { item ->
+                                    openPrescription(item.prescription.id)
+                                }
+                            )
+                        }
+                    }
+
+                    SnackbarHost(
+                        hostState = snackbarHostState,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp)
                     )
                 }
             }
