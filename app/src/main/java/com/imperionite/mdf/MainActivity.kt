@@ -10,21 +10,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
-import com.imperionite.mdf.ui.theme.MDFTheme
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imperionite.mdf.data.local.DatabaseProvider
 import com.imperionite.mdf.data.local.entity.PrescriptionWithMedicines
@@ -33,11 +31,13 @@ import com.imperionite.mdf.data.repository.PurchaseRepository
 import com.imperionite.mdf.ui.prescriptions.BatchPurchasingScreen
 import com.imperionite.mdf.ui.prescriptions.CreatePrescriptionScreen
 import com.imperionite.mdf.ui.prescriptions.PrescriptionDetailsScreen
+import com.imperionite.mdf.ui.prescriptions.PrescriptionInsightsScreen
 import com.imperionite.mdf.ui.prescriptions.PrescriptionListScreen
+import com.imperionite.mdf.ui.theme.MDFTheme
 import com.imperionite.mdf.viewmodel.PrescriptionDetailsViewModel
 import com.imperionite.mdf.viewmodel.PrescriptionListViewModel
 import com.imperionite.mdf.viewmodel.PrescriptionListViewModelFactory
-
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -88,8 +88,17 @@ class MainActivity : ComponentActivity() {
 
                 val purchaseState by detailsViewModel.purchaseState.collectAsState()
 
-                var showCreateForm by remember { mutableStateOf(false) }
-                var showBatchPurchasing by remember { mutableStateOf(false) }
+                var showCreateForm by remember {
+                    mutableStateOf(false)
+                }
+
+                var showBatchPurchasing by remember {
+                    mutableStateOf(false)
+                }
+
+                var showInsightsReport by remember {
+                    mutableStateOf(false)
+                }
 
                 var editingPrescription by remember {
                     mutableStateOf<PrescriptionWithMedicines?>(null)
@@ -128,13 +137,16 @@ class MainActivity : ComponentActivity() {
                 ) {
                     when {
                         purchaseState.savedBatchId != null -> {
-                            val message = if (editingPurchaseBatchId == null) {
-                                "Purchase batch saved successfully."
-                            } else {
-                                "Purchase batch updated successfully."
-                            }
+                            val message =
+                                if (editingPurchaseBatchId == null) {
+                                    "Purchase batch saved successfully."
+                                } else {
+                                    "Purchase batch updated successfully."
+                                }
+
                             showBatchPurchasing = false
                             editingPurchaseBatchId = null
+
                             snackbarHostState.showSnackbar(message)
                             detailsViewModel.clearPurchaseMessage()
                         }
@@ -148,10 +160,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Purchase-form failures remain inline; failures on the details screen
-                // (such as a failed batch deletion) are surfaced through the Snack bar.
-                LaunchedEffect(purchaseState.errorMessage, showBatchPurchasing) {
+                // Purchase-form failures remain inline. Failures on the details
+                // screen, such as a failed batch deletion, use the Snackbar.
+                LaunchedEffect(
+                    purchaseState.errorMessage,
+                    showBatchPurchasing
+                ) {
                     val message = purchaseState.errorMessage
+
                     if (message != null && !showBatchPurchasing) {
                         snackbarHostState.showSnackbar(message)
                         detailsViewModel.clearPurchaseMessage()
@@ -179,20 +195,26 @@ class MainActivity : ComponentActivity() {
                 fun openPrescription(prescriptionId: Long) {
                     selectedPrescriptionId = prescriptionId
                     showBatchPurchasing = false
+                    showInsightsReport = false
                     editingPurchaseBatchId = null
+
                     detailsViewModel.loadPrescription(prescriptionId)
                     detailsViewModel.clearPurchaseMessage()
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     when {
+                        // CREATE OR EDIT PRESCRIPTION
                         showCreateForm -> {
                             CreatePrescriptionScreen(
                                 initialPrescription = editingPrescription,
                                 attachmentUri = selectedAttachment?.toString(),
                                 onChooseAttachment = {
                                     attachmentPicker.launch(
-                                        arrayOf("application/pdf", "image/*")
+                                        arrayOf(
+                                            "application/pdf",
+                                            "image/*"
+                                        )
                                     )
                                 },
                                 onRemoveAttachment = {
@@ -207,16 +229,20 @@ class MainActivity : ComponentActivity() {
                                         isSavingPrescription = true
                                         saveError = null
 
-                                        val successMessage = if (editingPrescription == null) {
-                                            "Prescription saved successfully."
-                                        } else {
-                                            "Prescription updated successfully."
-                                        }
+                                        val successMessage =
+                                            if (editingPrescription == null) {
+                                                "Prescription saved successfully."
+                                            } else {
+                                                "Prescription updated successfully."
+                                            }
 
                                         val onSaved: () -> Unit = {
                                             coroutineScope.launch {
-                                                snackbarHostState.showSnackbar(successMessage)
+                                                snackbarHostState.showSnackbar(
+                                                    successMessage
+                                                )
                                             }
+
                                             isSavingPrescription = false
                                             showCreateForm = false
                                             editingPrescription = null
@@ -230,7 +256,8 @@ class MainActivity : ComponentActivity() {
                                             saveError = message
                                         }
 
-                                        val attachment = selectedAttachment?.toString()
+                                        val attachment =
+                                            selectedAttachment?.toString()
 
                                         if (editingPrescription == null) {
                                             prescriptionViewModel.addPrescription(
@@ -276,7 +303,10 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        showBatchPurchasing && selectedPrescriptionId != null -> {
+                        // CREATE OR EDIT PURCHASE BATCH
+                        showBatchPurchasing &&
+                                selectedPrescriptionId != null -> {
+
                             val currentDetails = details
                             val batchId = editingPurchaseBatchId
 
@@ -292,7 +322,12 @@ class MainActivity : ComponentActivity() {
                                 currentDetails == null ||
                                 (batchId != null && editingBatch == null)
                             ) {
-                                CircularProgressIndicator()
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
                             } else {
                                 BatchPurchasingScreen(
                                     prescriptionId = selectedPrescriptionId!!,
@@ -327,26 +362,55 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
                         }
 
+                        // PRESCRIPTION INSIGHTS AND HISTORY REPORT
+                        showInsightsReport &&
+                                selectedPrescriptionId != null -> {
+
+                            val currentDetails = details
+
+                            if (currentDetails == null) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            } else {
+                                PrescriptionInsightsScreen(
+                                    details = currentDetails,
+                                    onBack = {
+                                        showInsightsReport = false
+                                    }
+                                )
+                            }
+                        }
+
+                        // PRESCRIPTION DETAILS
                         selectedPrescriptionId != null -> {
                             val currentDetails = details
 
                             if (currentDetails == null) {
-                                CircularProgressIndicator()
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
                             } else {
                                 PrescriptionDetailsScreen(
                                     details = currentDetails,
                                     onBack = {
                                         selectedPrescriptionId = null
                                         showBatchPurchasing = false
+                                        showInsightsReport = false
                                         editingPurchaseBatchId = null
+
                                         detailsViewModel.clearPurchaseMessage()
                                     },
                                     onEdit = {
-                                        editingPrescription =
-                                            currentDetails.prescription
+                                        editingPrescription = currentDetails.prescription
 
                                         selectedAttachment =
                                             currentDetails.prescription.prescription
@@ -368,11 +432,15 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onDeleteBatch = { batchId ->
                                         detailsViewModel.deletePurchase(batchId)
+                                    },
+                                    onOpenInsights = {
+                                        showInsightsReport = true
                                     }
                                 )
                             }
                         }
 
+                        // PRESCRIPTION LIST
                         else -> {
                             PrescriptionListScreen(
                                 prescriptions = prescriptions,
@@ -385,6 +453,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onEditPrescription = { item ->
                                     editingPrescription = item
+
                                     selectedAttachment =
                                         item.prescription.attachmentUri?.let(Uri::parse)
 
