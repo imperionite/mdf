@@ -55,6 +55,7 @@ private data class PurchaseMedicineForm(
     val unitPriceText: String = ""
 )
 
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BatchPurchasingScreen(
@@ -86,14 +87,6 @@ fun BatchPurchasingScreen(
 
     // Quantities already recorded in the batch being edited.
     // These are added back to the available quantity for this form.
-    val quantitiesInEditingBatch = remember(editingBatch?.batch?.id) {
-        editingBatch?.items
-            ?.groupBy { it.prescriptionMedicineId }
-            ?.mapValues { (_, items) ->
-                items.sumOf { it.purchasedQuantity }
-            }
-            ?: emptyMap()
-    }
 
     val existingItems = remember(editingBatch?.batch?.id) {
         editingBatch?.items?.associateBy {
@@ -218,7 +211,7 @@ fun BatchPurchasingScreen(
                 title = {
                     Text(
                         if (isEditing) {
-                            "Edit Purchase Batch #${editingBatch!!.batch.id}"
+                            "Edit Purchase Batch"
                         } else {
                             "Batch Purchasing"
                         }

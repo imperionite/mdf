@@ -1,4 +1,3 @@
-
 package com.imperionite.mdf.data.local.dao
 
 import androidx.room.Dao

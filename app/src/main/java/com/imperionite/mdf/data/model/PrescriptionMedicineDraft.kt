@@ -1,4 +1,3 @@
-
 package com.imperionite.mdf.data.model
 
 data class PrescriptionMedicineDraft(

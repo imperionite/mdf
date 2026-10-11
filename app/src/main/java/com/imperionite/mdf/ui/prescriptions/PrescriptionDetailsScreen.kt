@@ -21,18 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.material3.OutlinedButton
 
 import com.imperionite.mdf.data.local.entity.PrescriptionMedicineEntity
 import com.imperionite.mdf.data.repository.PrescriptionDetails
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -40,6 +34,7 @@ private val trackingDateFormatter =
     DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 
 @Composable
+@Suppress("FunctionName")
 fun PrescriptionDetailsScreen(
     details: PrescriptionDetails,
     onBack: () -> Unit,
@@ -52,6 +47,17 @@ fun PrescriptionDetailsScreen(
     val medicines = details.prescription.medicines
     val batches = details.purchaseBatches
     val latestBatchId = batches.maxOfOrNull { it.batch.id }
+
+    // Batch numbers are presentation labels scoped to this prescription.
+    // Assign them by transaction creation order, not by the global Room ID.
+    // Rebuilding this map from the live list automatically renumbers batches
+    // after a deletion. The DAO's ID remains the internal record identifier.
+    val batchNumbersById = remember(batches) {
+        batches
+            .sortedBy { it.batch.id }
+            .mapIndexed { index, batch -> batch.batch.id to (index + 1) }
+            .toMap()
+    }
 
     var batchPendingDeletion by remember {
         mutableStateOf<Long?>(null)
@@ -132,7 +138,7 @@ fun PrescriptionDetailsScreen(
 
                     if (showAttachmentPreview) {
                         PrescriptionAttachmentPreviewDialog(
-                            uri = prescription.attachmentUri!!,
+                            uri = prescription.attachmentUri,
                             onDismiss = {
                                 showAttachmentPreview = false
                             }
@@ -242,7 +248,7 @@ fun PrescriptionDetailsScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            "Batch #$batchId",
+                            "Batch #${batchNumbersById[batchId] ?: "—"}",
                             style = MaterialTheme.typography.titleMedium
                         )
 
@@ -262,7 +268,7 @@ fun PrescriptionDetailsScreen(
                             Text(
                                 "$medicineName: " +
                                         "${formatQuantity(item.purchasedQuantity)} × " +
-                                        "${formatMoney(item.unitPriceCentavos)}"
+                                        formatMoney(item.unitPriceCentavos)
                             )
                         }
 
@@ -300,10 +306,22 @@ fun PrescriptionDetailsScreen(
                             }
                         } else {
                             Text(
-                                "Locked: a newer purchase batch exists.",
+                                "Editing is locked because a newer purchase batch exists.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall
                             )
+
+                            // Any batch can be deleted. Only the latest batch
+                            // remains editable to preserve the existing rule.
+                            OutlinedButton(
+                                onClick = { batchPendingDeletion = batchId },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    "Delete Batch",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }
@@ -313,6 +331,7 @@ fun PrescriptionDetailsScreen(
 }
 
 @Composable
+@Suppress("FunctionName")
 private fun NextPurchaseTrackingCard(
     medicine: PrescriptionMedicineEntity,
     batches: List<com.imperionite.mdf.data.local.entity.PurchaseBatchWithItems>
@@ -387,6 +406,7 @@ private fun NextPurchaseTrackingCard(
 }
 
 @Composable
+@Suppress("FunctionName")
 private fun MedicineQuantityCard(
     medicine: PrescriptionMedicineEntity,
     purchasedQuantity: Double
@@ -433,6 +453,6 @@ private fun formatQuantity(quantity: Double): String {
 }
 
 private fun formatMoney(centavos: Long): String {
-    return NumberFormat.getCurrencyInstance(Locale("en", "PH"))
+    return NumberFormat.getCurrencyInstance(Locale.forLanguageTag("en-PH"))
         .format(centavos / 100.0)
 }

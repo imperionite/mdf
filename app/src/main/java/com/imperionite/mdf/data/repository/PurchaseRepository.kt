@@ -135,23 +135,12 @@ class PurchaseRepository(
 
     suspend fun deletePurchaseBatch(batchId: Long) {
         database.withTransaction {
-            val existing = purchaseBatchDao.getWithItems(batchId)
-                ?: throw IllegalArgumentException("Purchase batch not found.")
 
-            requireLatestBatch(existing.batch.prescriptionId, batchId)
-
+            // Deletion is allowed for any batch belonging to this prescription.
             // Explicitly remove items first to respect foreign-key constraints.
             purchaseBatchItemDao.deleteByBatchId(batchId)
             purchaseBatchDao.deleteById(batchId)
         }
-    }
-
-    suspend fun isLatestBatch(batchId: Long): Boolean {
-        val batch = purchaseBatchDao.getWithItems(batchId) ?: return false
-
-        return purchaseBatchDao.getLatestBatchId(
-            batch.batch.prescriptionId
-        ) == batchId
     }
 
     private suspend fun requireLatestBatch(
@@ -161,7 +150,7 @@ class PurchaseRepository(
         val latestId = purchaseBatchDao.getLatestBatchId(prescriptionId)
 
         require(latestId == batchId) {
-            "Only the latest saved purchase batch can be edited or deleted."
+            "Only the latest saved purchase batch can be edited."
         }
     }
 

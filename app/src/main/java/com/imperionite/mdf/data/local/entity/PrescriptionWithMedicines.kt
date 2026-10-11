@@ -1,4 +1,3 @@
-
 package com.imperionite.mdf.data.local.entity
 
 import androidx.room.Embedded
