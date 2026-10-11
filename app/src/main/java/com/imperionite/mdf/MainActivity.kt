@@ -27,6 +27,7 @@ import com.imperionite.mdf.viewmodel.PrescriptionDetailsViewModel
 import com.imperionite.mdf.viewmodel.PrescriptionListViewModel
 import com.imperionite.mdf.viewmodel.PrescriptionListViewModelFactory
 
+
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {

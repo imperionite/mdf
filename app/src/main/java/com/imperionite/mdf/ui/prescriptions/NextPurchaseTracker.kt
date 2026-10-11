@@ -91,10 +91,10 @@ fun calculateNextPurchaseTracking(
     var supplyGapDetected = false
     var cursorDate = medicinePurchases.first().date
 
-    for (purchase in medicinePurchases) {
+    for ((date, _, quantity) in medicinePurchases) {
         val elapsedDays = ChronoUnit.DAYS.between(
             cursorDate,
-            purchase.date
+            date
         )
 
         val expectedConsumption = elapsedDays * dailyConsumption
@@ -107,8 +107,8 @@ fun calculateNextPurchaseTracking(
                 estimatedStock - expectedConsumption
                 ).coerceAtLeast(0.0)
 
-        estimatedStock += purchase.quantity
-        cursorDate = purchase.date
+        estimatedStock += quantity
+        cursorDate = date
     }
 
     val daysSinceLastPurchase = ChronoUnit.DAYS.between(

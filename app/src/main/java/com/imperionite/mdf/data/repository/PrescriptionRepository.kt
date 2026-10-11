@@ -1,4 +1,3 @@
-
 package com.imperionite.mdf.data.repository
 
 import androidx.room.withTransaction
@@ -126,12 +125,12 @@ class PrescriptionRepository(
 
         require(medicines.all { medicine ->
             medicine.medicineName.isNotBlank() &&
-                medicine.prescribedQuantity > 0.0 &&
-                medicine.prescribedQuantity.isFinite() &&
-                medicine.unit.isNotBlank() &&
-                medicine.dosage.isNotBlank() &&
-                medicine.dosageRegimen.isNotBlank() &&
-                medicine.unitPriceCentavos >= 0
+                    medicine.prescribedQuantity > 0.0 &&
+                    medicine.prescribedQuantity.isFinite() &&
+                    medicine.unit.isNotBlank() &&
+                    medicine.dosage.isNotBlank() &&
+                    medicine.dosageRegimen.isNotBlank() &&
+                    medicine.unitPriceCentavos >= 0
         }) {
             "Check the medicine details and try again."
         }

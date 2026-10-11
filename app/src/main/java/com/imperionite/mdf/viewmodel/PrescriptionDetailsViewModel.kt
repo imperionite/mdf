@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalCoroutinesApi::class)
+
 package com.imperionite.mdf.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -5,6 +7,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.imperionite.mdf.data.repository.PurchaseItemDraft
 import com.imperionite.mdf.data.repository.PurchaseRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,6 +71,9 @@ class PrescriptionDetailsViewModel(
                     savedBatchId = batchId
                 )
             } catch (exception: Exception) {
+                if (exception is CancellationException) {
+                    ensureActive()
+                }
                 _purchaseState.value = PurchaseUiState(
                     errorMessage = exception.message
                         ?: "Unable to save this purchase."
@@ -97,6 +105,9 @@ class PrescriptionDetailsViewModel(
                     savedBatchId = batchId
                 )
             } catch (exception: Exception) {
+                if (exception is CancellationException) {
+                    ensureActive()
+                }
                 _purchaseState.value = PurchaseUiState(
                     errorMessage = exception.message
                         ?: "Unable to update this purchase."
@@ -118,6 +129,9 @@ class PrescriptionDetailsViewModel(
                     deletedBatchId = batchId
                 )
             } catch (exception: Exception) {
+                if (exception is CancellationException) {
+                    ensureActive()
+                }
                 _purchaseState.value = PurchaseUiState(
                     errorMessage = exception.message
                         ?: "Unable to delete this purchase."

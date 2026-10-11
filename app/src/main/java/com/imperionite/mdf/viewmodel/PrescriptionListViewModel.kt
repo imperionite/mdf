@@ -1,4 +1,3 @@
-
 package com.imperionite.mdf.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -8,7 +7,9 @@ import com.imperionite.mdf.data.local.entity.PrescriptionEntity
 import com.imperionite.mdf.data.local.entity.PrescriptionWithMedicines
 import com.imperionite.mdf.data.model.PrescriptionMedicineDraft
 import com.imperionite.mdf.data.repository.PrescriptionRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -46,6 +47,9 @@ class PrescriptionListViewModel(
                 }
                 onSaved()
             } catch (exception: Exception) {
+                if (exception is CancellationException) {
+                    ensureActive()
+                }
                 onError(
                     exception.localizedMessage
                         ?: "Unable to save the prescription."
@@ -78,6 +82,9 @@ class PrescriptionListViewModel(
                 }
                 onSaved()
             } catch (exception: Exception) {
+                if (exception is CancellationException) {
+                    ensureActive()
+                }
                 onError(
                     exception.localizedMessage
                         ?: "Unable to update the prescription."
@@ -93,6 +100,7 @@ class PrescriptionListViewModel(
                     repository.deletePrescription(prescription)
                 }
             } catch (_: Exception) {
+                ensureActive()
                 // Delete error feedback can be added with confirmation UI.
             }
         }

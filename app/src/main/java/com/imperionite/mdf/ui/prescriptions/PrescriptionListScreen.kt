@@ -36,6 +36,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("FunctionName")
 fun PrescriptionListScreen(
     prescriptions: List<PrescriptionWithMedicines>,
     onCreatePrescription: () -> Unit,
@@ -223,13 +224,19 @@ fun PrescriptionListScreen(
 }
 
 private fun formatPrice(centavos: Long): String {
+    val locale = Locale.Builder()
+        .setLanguage("en")
+        .setRegion("PH")
+        .build()
+
     return NumberFormat
-        .getCurrencyInstance(Locale("en", "PH"))
+        .getCurrencyInstance(locale)
         .format(centavos / 100.0)
 }
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
+@Suppress("FunctionName")
 private fun PrescriptionListScreenPreview() {
     MaterialTheme {
         PrescriptionListScreen(

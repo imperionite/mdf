@@ -1,4 +1,3 @@
-
 package com.imperionite.mdf.ui.prescriptions
 
 import android.app.DatePickerDialog
@@ -51,6 +50,7 @@ private data class MedicineFormState(
 )
 
 @Composable
+@Suppress("FunctionName")
 fun CreatePrescriptionScreen(
     initialPrescription: PrescriptionWithMedicines?,
     attachmentUri: String?,
@@ -66,21 +66,20 @@ fun CreatePrescriptionScreen(
     isSaving: Boolean,
     errorMessage: String?
 ) {
-    val existing = initialPrescription
 
-    var physicianName by remember(existing?.prescription?.id) {
-        mutableStateOf(existing?.prescription?.physicianName.orEmpty())
+    var physicianName by remember(initialPrescription?.prescription?.id) {
+        mutableStateOf(initialPrescription?.prescription?.physicianName.orEmpty())
     }
 
-    var notes by remember(existing?.prescription?.id) {
-        mutableStateOf(existing?.prescription?.notes.orEmpty())
+    var notes by remember(initialPrescription?.prescription?.id) {
+        mutableStateOf(initialPrescription?.prescription?.notes.orEmpty())
     }
 
-    var selectedDate by remember(existing?.prescription?.id) {
+    var selectedDate by remember(initialPrescription?.prescription?.id) {
         mutableStateOf(
             runCatching {
                 LocalDate.parse(
-                    existing?.prescription?.prescriptionDate
+                    initialPrescription?.prescription?.prescriptionDate
                         ?: LocalDate.now().format(storageDateFormatter),
                     storageDateFormatter
                 )
@@ -88,13 +87,13 @@ fun CreatePrescriptionScreen(
         )
     }
 
-    var physicianError by remember(existing?.prescription?.id) {
+    var physicianError by remember(initialPrescription?.prescription?.id) {
         mutableStateOf(false)
     }
 
-    var medicineForms by remember(existing?.prescription?.id) {
+    var medicineForms by remember(initialPrescription?.prescription?.id) {
         mutableStateOf(
-            existing?.medicines?.map { medicine ->
+            initialPrescription?.medicines?.map { medicine ->
                 MedicineFormState(
                     id = medicine.id,
                     medicineName = medicine.medicineName,
@@ -111,7 +110,7 @@ fun CreatePrescriptionScreen(
         )
     }
 
-    var formError by remember(existing?.prescription?.id) {
+    var formError by remember(initialPrescription?.prescription?.id) {
         mutableStateOf<String?>(null)
     }
 
@@ -193,7 +192,7 @@ fun CreatePrescriptionScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = if (existing == null) "New Prescription" else "Edit Prescription",
+            text = if (initialPrescription == null) "New Prescription" else "Edit Prescription",
             style = MaterialTheme.typography.headlineSmall
         )
 
@@ -312,8 +311,8 @@ fun CreatePrescriptionScreen(
                         if (medicineForms.size > 1) {
                             TextButton(
                                 onClick = {
-                                    medicineForms = medicineForms.filterIndexed {
-                                            rowIndex, _ -> rowIndex != index
+                                    medicineForms = medicineForms.filterIndexed { rowIndex, _ ->
+                                        rowIndex != index
                                     }
                                     formError = null
                                 },
@@ -442,7 +441,7 @@ fun CreatePrescriptionScreen(
 
         if (!errorMessage.isNullOrBlank()) {
             Text(
-                text = errorMessage.orEmpty(),
+                text = errorMessage,
                 color = MaterialTheme.colorScheme.error
             )
         }
