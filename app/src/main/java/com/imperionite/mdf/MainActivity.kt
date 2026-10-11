@@ -108,12 +108,10 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf<Long?>(null)
                 }
 
-                // Non-null only when editing an existing purchase batch.
                 var editingPurchaseBatchId by remember {
                     mutableStateOf<Long?>(null)
                 }
 
-                // Return to details after editing a prescription from its details.
                 var returnToDetailsAfterEdit by remember {
                     mutableStateOf(false)
                 }
@@ -130,7 +128,6 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf<String?>(null)
                 }
 
-                // Keep operation feedback at the app level so it survives screen changes.
                 LaunchedEffect(
                     purchaseState.savedBatchId,
                     purchaseState.deletedBatchId
@@ -160,8 +157,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Purchase-form failures remain inline. Failures on the details
-                // screen, such as a failed batch deletion, use the Snackbar.
                 LaunchedEffect(
                     purchaseState.errorMessage,
                     showBatchPurchasing
@@ -364,7 +359,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        // PRESCRIPTION INSIGHTS AND HISTORY REPORT
+                        // INSIGHT REPORT FOR THE SELECTED PRESCRIPTION
                         showInsightsReport &&
                                 selectedPrescriptionId != null -> {
 
@@ -382,6 +377,8 @@ class MainActivity : ComponentActivity() {
                                     details = currentDetails,
                                     onBack = {
                                         showInsightsReport = false
+                                        selectedPrescriptionId = null
+                                        editingPurchaseBatchId = null
                                     }
                                 )
                             }
@@ -432,9 +429,6 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onDeleteBatch = { batchId ->
                                         detailsViewModel.deletePurchase(batchId)
-                                    },
-                                    onOpenInsights = {
-                                        showInsightsReport = true
                                     }
                                 )
                             }
@@ -480,6 +474,10 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOpenDetails = { item ->
                                     openPrescription(item.prescription.id)
+                                },
+                                onOpenInsights = { item ->
+                                    openPrescription(item.prescription.id)
+                                    showInsightsReport = true
                                 }
                             )
                         }
