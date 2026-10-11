@@ -1,3 +1,4 @@
+
 package com.imperionite.mdf.ui.prescriptions
 
 import androidx.compose.foundation.layout.Arrangement
@@ -22,8 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-
 import com.imperionite.mdf.data.local.entity.PrescriptionMedicineEntity
+import com.imperionite.mdf.data.local.entity.PurchaseBatchWithItems
 import com.imperionite.mdf.data.repository.PrescriptionDetails
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -42,17 +43,14 @@ fun PrescriptionDetailsScreen(
     onEdit: () -> Unit,
     onNewPurchase: () -> Unit,
     onEditBatch: (Long) -> Unit,
-    onDeleteBatch: (Long) -> Unit
+    onDeleteBatch: (Long) -> Unit,
+    onOpenInsights: () -> Unit
 ) {
     val prescription = details.prescription.prescription
     val medicines = details.prescription.medicines
     val batches = details.purchaseBatches
     val latestBatchId = batches.maxOfOrNull { it.batch.id }
 
-    // Batch numbers are presentation labels scoped to this prescription.
-    // Assign them by transaction creation order, not by the global Room ID.
-    // Rebuilding this map from the live list automatically renumbers batches
-    // after a deletion. The DAO's ID remains the internal record identifier.
     val batchNumbersById = remember(batches) {
         batches
             .sortedBy { it.batch.id }
@@ -60,13 +58,8 @@ fun PrescriptionDetailsScreen(
             .toMap()
     }
 
-    var batchPendingDeletion by remember {
-        mutableStateOf<Long?>(null)
-    }
-
-    var showAttachmentPreview by remember {
-        mutableStateOf(false)
-    }
+    var batchPendingDeletion by remember { mutableStateOf<Long?>(null) }
+    var showAttachmentPreview by remember { mutableStateOf(false) }
 
     if (batchPendingDeletion != null) {
         AlertDialog(
@@ -87,16 +80,11 @@ fun PrescriptionDetailsScreen(
                         if (id != null) onDeleteBatch(id)
                     }
                 ) {
-                    Text(
-                        "Delete",
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { batchPendingDeletion = null }
-                ) {
+                TextButton(onClick = { batchPendingDeletion = null }) {
                     Text("Cancel")
                 }
             }
@@ -111,7 +99,7 @@ fun PrescriptionDetailsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "Prescription Details",
+            "Prescription Details",
             style = MaterialTheme.typography.headlineSmall
         )
 
@@ -134,9 +122,7 @@ fun PrescriptionDetailsScreen(
 
                 if (prescription.attachmentUri != null) {
                     OutlinedButton(
-                        onClick = {
-                            showAttachmentPreview = true
-                        },
+                        onClick = { showAttachmentPreview = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("View Doctor's Prescription")
@@ -145,19 +131,14 @@ fun PrescriptionDetailsScreen(
                     if (showAttachmentPreview) {
                         PrescriptionAttachmentPreviewDialog(
                             uri = prescription.attachmentUri,
-                            onDismiss = {
-                                showAttachmentPreview = false
-                            }
+                            onDismiss = { showAttachmentPreview = false }
                         )
                     }
                 }
             }
         }
 
-        Text(
-            "Prescribed Medicines",
-            style = MaterialTheme.typography.titleMedium
-        )
+        Text("Prescribed Medicines", style = MaterialTheme.typography.titleMedium)
 
         if (medicines.isEmpty()) {
             Text("No medicines are recorded for this prescription.")
@@ -171,11 +152,7 @@ fun PrescriptionDetailsScreen(
             }
         }
 
-        // New advisory tracking report.
-        Text(
-            "Next Purchase Tracking",
-            style = MaterialTheme.typography.titleMedium
-        )
+        Text("Next Purchase Tracking", style = MaterialTheme.typography.titleMedium)
 
         Text(
             "These dates are estimates based on the recorded dosage " +
@@ -189,11 +166,15 @@ fun PrescriptionDetailsScreen(
             Text("Add a medicine to see its tracking report.")
         } else {
             medicines.forEach { medicine ->
-                NextPurchaseTrackingCard(
-                    medicine = medicine,
-                    batches = batches
-                )
+                NextPurchaseTrackingCard(medicine = medicine, batches = batches)
             }
+        }
+
+        Button(
+            onClick = onOpenInsights,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Prescription Insights & History Report")
         }
 
         Row(
@@ -226,10 +207,7 @@ fun PrescriptionDetailsScreen(
             Text("Record Purchase")
         }
 
-        Text(
-            "Purchase History",
-            style = MaterialTheme.typography.titleMedium
-        )
+        Text("Purchase History", style = MaterialTheme.typography.titleMedium)
 
         if (batches.isEmpty()) {
             Text("No purchases have been recorded yet.")
@@ -239,12 +217,10 @@ fun PrescriptionDetailsScreen(
                 val isLatest = batchId == latestBatchId
 
                 val totalCentavos = batch.items.fold(0L) { total, item ->
-                    val itemTotal = BigDecimal.valueOf(
-                        item.purchasedQuantity
-                    ).multiply(
-                        BigDecimal.valueOf(item.unitPriceCentavos)
-                    ).setScale(0, RoundingMode.HALF_UP).longValueExact()
-
+                    val itemTotal = BigDecimal.valueOf(item.purchasedQuantity)
+                        .multiply(BigDecimal.valueOf(item.unitPriceCentavos))
+                        .setScale(0, RoundingMode.HALF_UP)
+                        .longValueExact()
                     Math.addExact(total, itemTotal)
                 }
 
@@ -262,7 +238,6 @@ fun PrescriptionDetailsScreen(
                             "Batch #${batchNumbersById[batchId] ?: "—"}",
                             style = MaterialTheme.typography.titleMedium
                         )
-
                         Text("Purchase date: ${batch.batch.purchaseDate}")
                         Text("Items: ${batch.items.size}")
                         Text("Batch total: ${formatMoney(totalCentavos)}")
@@ -285,16 +260,14 @@ fun PrescriptionDetailsScreen(
 
                         if (isLatest) {
                             Text(
-                                "This is the latest saved batch. " +
-                                        "You can edit or delete it.",
+                                "This is the latest saved batch. You can edit or delete it.",
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.bodySmall
                             )
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement =
-                                    Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 OutlinedButton(
                                     onClick = { onEditBatch(batchId) },
@@ -302,17 +275,11 @@ fun PrescriptionDetailsScreen(
                                 ) {
                                     Text("Edit Batch")
                                 }
-
                                 OutlinedButton(
-                                    onClick = {
-                                        batchPendingDeletion = batchId
-                                    },
+                                    onClick = { batchPendingDeletion = batchId },
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text(
-                                        "Delete",
-                                        color = MaterialTheme.colorScheme.error
-                                    )
+                                    Text("Delete", color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         } else {
@@ -321,17 +288,11 @@ fun PrescriptionDetailsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall
                             )
-
-                            // Any batch can be deleted. Only the latest batch
-                            // remains editable to preserve the existing rule.
                             OutlinedButton(
                                 onClick = { batchPendingDeletion = batchId },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(
-                                    "Delete Batch",
-                                    color = MaterialTheme.colorScheme.error
-                                )
+                                Text("Delete Batch", color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -345,12 +306,9 @@ fun PrescriptionDetailsScreen(
 @Suppress("FunctionName")
 private fun NextPurchaseTrackingCard(
     medicine: PrescriptionMedicineEntity,
-    batches: List<com.imperionite.mdf.data.local.entity.PurchaseBatchWithItems>
+    batches: List<PurchaseBatchWithItems>
 ) {
-    val report = calculateNextPurchaseTracking(
-        medicine = medicine,
-        batches = batches
-    )
+    val report = calculateNextPurchaseTracking(medicine, batches)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -362,11 +320,7 @@ private fun NextPurchaseTrackingCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                medicine.medicineName,
-                style = MaterialTheme.typography.titleMedium
-            )
-
+            Text(medicine.medicineName, style = MaterialTheme.typography.titleMedium)
             Text("Posology: ${medicine.dosageRegimen}")
 
             Text(
@@ -375,39 +329,24 @@ private fun NextPurchaseTrackingCard(
                 color = when (report.status) {
                     "Purchase Soon", "Possible Run-Out" ->
                         MaterialTheme.colorScheme.error
-
                     "Manual Review Required", "Review Supply History" ->
                         MaterialTheme.colorScheme.tertiary
-
                     else -> MaterialTheme.colorScheme.primary
                 }
             )
 
-            report.dailyConsumption?.let { daily ->
-                Text(
-                    "Estimated daily consumption: " +
-                            "${formatQuantity(daily)} ${medicine.unit}/day"
-                )
+            report.dailyConsumption?.let {
+                Text("Estimated daily consumption: ${formatQuantity(it)} ${medicine.unit}/day")
             }
-
-            report.estimatedCurrentStock?.let { stock ->
-                Text(
-                    "Estimated current stock: " +
-                            "${formatQuantity(stock)} ${medicine.unit}"
-                )
+            report.estimatedCurrentStock?.let {
+                Text("Estimated current stock: ${formatQuantity(it)} ${medicine.unit}")
             }
-
-            report.estimatedRunOutDate?.let { date ->
-                Text(
-                    "Estimated run-out date: " +
-                            date.format(trackingDateFormatter)
-                )
+            report.estimatedRunOutDate?.let {
+                Text("Estimated run-out date: ${it.format(trackingDateFormatter)}")
             }
-
-            report.suggestedPurchaseDate?.let { date ->
+            report.suggestedPurchaseDate?.let {
                 Text(
-                    "Suggested next purchase: " +
-                            date.format(trackingDateFormatter),
+                    "Suggested next purchase: ${it.format(trackingDateFormatter)}",
                     style = MaterialTheme.typography.titleSmall
                 )
             }
@@ -427,9 +366,8 @@ private fun MedicineQuantityCard(
     medicine: PrescriptionMedicineEntity,
     purchasedQuantity: Double
 ) {
-    val remaining = (
-            medicine.prescribedQuantity - purchasedQuantity
-            ).coerceAtLeast(0.0)
+    val remaining = (medicine.prescribedQuantity - purchasedQuantity)
+        .coerceAtLeast(0.0)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -441,36 +379,19 @@ private fun MedicineQuantityCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(
-                medicine.medicineName,
-                style = MaterialTheme.typography.titleMedium
-            )
-
+            Text(medicine.medicineName, style = MaterialTheme.typography.titleMedium)
             Text("Dosage/strength: ${medicine.dosage}")
             Text("Dosage regimen: ${medicine.dosageRegimen}")
-            Text(
-                "Prescribed: ${formatQuantity(medicine.prescribedQuantity)} " +
-                        medicine.unit
-            )
-            Text(
-                "Purchased: ${formatQuantity(purchasedQuantity)} " +
-                        medicine.unit
-            )
-            Text(
-                "Remaining: ${formatQuantity(remaining)} ${medicine.unit}"
-            )
-            Text(
-                "Original unit price: " +
-                        formatMoney(medicine.unitPriceCentavos)
-            )
+            Text("Prescribed: ${formatQuantity(medicine.prescribedQuantity)} ${medicine.unit}")
+            Text("Purchased: ${formatQuantity(purchasedQuantity)} ${medicine.unit}")
+            Text("Remaining: ${formatQuantity(remaining)} ${medicine.unit}")
+            Text("Original unit price: ${formatMoney(medicine.unitPriceCentavos)}")
         }
     }
 }
 
 private fun formatQuantity(quantity: Double): String {
-    return BigDecimal.valueOf(quantity)
-        .stripTrailingZeros()
-        .toPlainString()
+    return BigDecimal.valueOf(quantity).stripTrailingZeros().toPlainString()
 }
 
 private fun formatMoney(centavos: Long): String {
