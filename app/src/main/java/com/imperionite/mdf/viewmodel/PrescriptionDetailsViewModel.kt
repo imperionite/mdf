@@ -20,7 +20,6 @@ import kotlinx.coroutines.launch
 
 data class PurchaseUiState(
     val isSaving: Boolean = false,
-    val savedBatchId: Long? = null,
     val deletedBatchId: Long? = null,
     val errorMessage: String? = null
 )
@@ -52,7 +51,8 @@ class PrescriptionDetailsViewModel(
         prescriptionId: Long,
         purchaseDate: String,
         notes: String,
-        items: List<PurchaseItemDraft>
+        items: List<PurchaseItemDraft>,
+        onSaved: (Long) -> Unit = {}
     ) {
         if (_purchaseState.value.isSaving) return
 
@@ -67,9 +67,8 @@ class PrescriptionDetailsViewModel(
                     items = items
                 )
 
-                _purchaseState.value = PurchaseUiState(
-                    savedBatchId = batchId
-                )
+                _purchaseState.value = PurchaseUiState()
+                onSaved(batchId)
             } catch (exception: Exception) {
                 if (exception is CancellationException) {
                     ensureActive()
@@ -86,7 +85,8 @@ class PrescriptionDetailsViewModel(
         batchId: Long,
         purchaseDate: String,
         notes: String,
-        items: List<PurchaseItemDraft>
+        items: List<PurchaseItemDraft>,
+        onSaved: () -> Unit = {}
     ) {
         if (_purchaseState.value.isSaving) return
 
@@ -101,9 +101,8 @@ class PrescriptionDetailsViewModel(
                     items = items
                 )
 
-                _purchaseState.value = PurchaseUiState(
-                    savedBatchId = batchId
-                )
+                _purchaseState.value = PurchaseUiState()
+                onSaved()
             } catch (exception: Exception) {
                 if (exception is CancellationException) {
                     ensureActive()

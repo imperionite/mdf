@@ -76,6 +76,11 @@ class PrescriptionRepository(
                 )
             )
 
+            val submittedExistingIds = medicines.mapNotNull { it.id }
+            require(submittedExistingIds.distinct().size == submittedExistingIds.size) {
+                "A medicine cannot be included more than once in a prescription."
+            }
+
             medicines.forEach { draft ->
                 val draftId = draft.id
 
@@ -85,23 +90,41 @@ class PrescriptionRepository(
                             "A medicine does not belong to this prescription."
                         )
 
-                    retainedIds.add(draftId)
+                    val hasPurchaseHistory = medicineDao.hasPurchaseHistory(draftId)
+                    if (hasPurchaseHistory) {
+                        require(
+                            draft.medicineName.trim() == existingMedicine.medicineName &&
+                                    draft.unit.trim() == existingMedicine.unit
+                        ) {
+                            "A medicine with purchase history cannot be renamed or have its unit changed. " +
+                                    "Keep the original medicine entry to preserve historical records."
+                        }
 
+                        val purchasedQuantity = medicineDao.getPurchasedQuantity(draftId)
+                        require(
+                            draft.prescribedQuantity + QUANTITY_TOLERANCE >= purchasedQuantity
+                        ) {
+                            "The prescribed quantity for ${existingMedicine.medicineName} cannot be " +
+                                    "less than the $purchasedQuantity already purchased."
+                        }
+                    }
+
+                    retainedIds.add(draftId)
                     medicineDao.update(
-                        draft.toEntity(prescriptionId).copy(
-                            id = existingMedicine.id
-                        )
+                        draft.toEntity(prescriptionId).copy(id = existingMedicine.id)
                     )
                 } else {
-                    medicineDao.insert(
-                        draft.toEntity(prescriptionId)
-                    )
+                    medicineDao.insert(draft.toEntity(prescriptionId))
                 }
             }
 
             existingMedicines
                 .filterNot { it.id in retainedIds }
                 .forEach { medicine ->
+                    require(!medicineDao.hasPurchaseHistory(medicine.id)) {
+                        "${medicine.medicineName} has purchase history and cannot be removed. " +
+                                "Keep the medicine entry to preserve past purchases."
+                    }
                     medicineDao.delete(medicine)
                 }
         }
@@ -109,6 +132,10 @@ class PrescriptionRepository(
 
     suspend fun deletePrescription(prescription: PrescriptionEntity) {
         prescriptionDao.delete(prescription)
+    }
+
+    private companion object {
+        const val QUANTITY_TOLERANCE = 0.000001
     }
 
     private fun validatePrescription(

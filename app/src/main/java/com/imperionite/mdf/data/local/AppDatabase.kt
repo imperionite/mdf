@@ -4,10 +4,12 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.imperionite.mdf.data.local.dao.DemoSeedMetadataDao
 import com.imperionite.mdf.data.local.dao.PrescriptionDao
 import com.imperionite.mdf.data.local.dao.PrescriptionMedicineDao
 import com.imperionite.mdf.data.local.dao.PurchaseBatchDao
 import com.imperionite.mdf.data.local.dao.PurchaseBatchItemDao
+import com.imperionite.mdf.data.local.entity.DemoSeedMetadata
 import com.imperionite.mdf.data.local.entity.PrescriptionEntity
 import com.imperionite.mdf.data.local.entity.PrescriptionMedicineEntity
 import com.imperionite.mdf.data.local.entity.PurchaseBatchEntity
@@ -18,9 +20,10 @@ import com.imperionite.mdf.data.local.entity.PurchaseBatchItemEntity
         PrescriptionEntity::class,
         PrescriptionMedicineEntity::class,
         PurchaseBatchEntity::class,
-        PurchaseBatchItemEntity::class
+        PurchaseBatchItemEntity::class,
+        DemoSeedMetadata::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,9 +36,10 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun purchaseBatchItemDao(): PurchaseBatchItemDao
 
+    abstract fun demoSeedMetadataDao(): DemoSeedMetadataDao
+
     companion object {
 
-        // Retain your existing migration from database version 1 to 2.
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -66,7 +70,6 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        // Rebuild the table instead of relying on newer SQLite column-rename support.
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -186,6 +189,19 @@ abstract class AppDatabase : RoomDatabase() {
                     CREATE INDEX IF NOT EXISTS
                     index_purchase_batch_items_prescriptionMedicineId
                     ON purchase_batch_items(prescriptionMedicineId)
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS demo_seed_metadata (
+                        seedKey TEXT NOT NULL PRIMARY KEY,
+                        seededAtEpochMillis INTEGER NOT NULL
+                    )
                     """.trimIndent()
                 )
             }

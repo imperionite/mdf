@@ -26,6 +26,9 @@ interface PrescriptionDao {
     @Query("SELECT * FROM prescriptions WHERE id = :id")
     suspend fun getById(id: Long): PrescriptionEntity?
 
+    @Query("SELECT COUNT(*) FROM prescriptions")
+    suspend fun countAll(): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(prescription: PrescriptionEntity): Long
 

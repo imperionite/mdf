@@ -55,7 +55,7 @@ private data class PurchaseMedicineForm(
     val unitPriceText: String = ""
 )
 
-@Suppress("DEPRECATION")
+@Suppress("FunctionName")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BatchPurchasingScreen(
@@ -82,7 +82,12 @@ fun BatchPurchasingScreen(
     val isEditing = editingBatch != null
 
     val currencyFormatter = remember {
-        NumberFormat.getCurrencyInstance(Locale("en", "PH"))
+        NumberFormat.getCurrencyInstance(
+            Locale.Builder()
+                .setLanguage("en")
+                .setRegion("PH")
+                .build()
+        )
     }
 
     // Quantities already recorded in the batch being edited.

@@ -39,8 +39,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.imperionite.mdf.data.local.entity.PrescriptionEntity
 import com.imperionite.mdf.data.local.entity.PrescriptionWithMedicines
-import java.text.NumberFormat
-import java.util.Locale
 
 private val DetailsButtonColor = Color(0xFF527D8B)
 private val ReportButtonColor = Color(0xFF86B0BD)
@@ -95,6 +93,7 @@ fun PrescriptionListScreen(
                                 text = "MDF",
                                 style = MaterialTheme.typography.titleMedium
                             )
+
                             Text(
                                 text = "Prescription Manager",
                                 style = MaterialTheme.typography.labelSmall,
@@ -111,6 +110,7 @@ fun PrescriptionListScreen(
                     imageVector = Icons.Default.Add,
                     contentDescription = null
                 )
+
                 Text(
                     text = " Add prescription",
                     modifier = Modifier.padding(start = 4.dp)
@@ -118,6 +118,7 @@ fun PrescriptionListScreen(
             }
         }
     ) { innerPadding ->
+
         if (prescriptions.isEmpty()) {
             Column(
                 modifier = Modifier
@@ -157,6 +158,7 @@ fun PrescriptionListScreen(
                     items = prescriptions,
                     key = { it.prescription.id }
                 ) { item ->
+
                     val prescription = item.prescription
 
                     Card(
@@ -171,6 +173,7 @@ fun PrescriptionListScreen(
                         Column(
                             modifier = Modifier.padding(16.dp)
                         ) {
+                            // Minimal prescription summary.
                             Text(
                                 text = prescription.physicianName,
                                 style = MaterialTheme.typography.titleMedium
@@ -187,39 +190,6 @@ fun PrescriptionListScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(top = 8.dp)
                             )
-
-                            item.medicines.forEach { medicine ->
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp)
-                                ) {
-                                    Text(
-                                        text = medicine.medicineName,
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
-
-                                    Text(
-                                        text = "Prescribed: ${medicine.prescribedQuantity} ${medicine.unit}",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-
-                                    Text(
-                                        text = "Dosage: ${medicine.dosage}",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-
-                                    Text(
-                                        text = "Dosage regimen: ${medicine.dosageRegimen}",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-
-                                    Text(
-                                        text = "Unit price: ${formatPrice(medicine.unitPriceCentavos)}",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            }
 
                             if (prescription.notes.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -242,7 +212,7 @@ fun PrescriptionListScreen(
                                 modifier = Modifier.padding(vertical = 12.dp)
                             )
 
-                            // Row 1: Details and this prescription's report.
+                            // Row 1: View Details and Insight Report.
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -307,6 +277,7 @@ fun PrescriptionListScreen(
             }
         }
 
+        // Delete confirmation dialog.
         pendingDeletePrescription?.let { prescriptionToDelete ->
             AlertDialog(
                 onDismissRequest = {
@@ -347,17 +318,6 @@ fun PrescriptionListScreen(
             )
         }
     }
-}
-
-private fun formatPrice(centavos: Long): String {
-    val locale = Locale.Builder()
-        .setLanguage("en")
-        .setRegion("PH")
-        .build()
-
-    return NumberFormat
-        .getCurrencyInstance(locale)
-        .format(centavos / 100.0)
 }
 
 @Preview(showBackground = true, showSystemUi = true)
