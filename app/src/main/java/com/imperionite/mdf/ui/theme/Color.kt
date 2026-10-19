@@ -2,7 +2,6 @@ package com.imperionite.mdf.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// MDF brand palette supplied for the app's clean, clinical visual style.
 val MdfBlueGray = Color(0xFFB7C4CF)   // #B7C4CF
 val MdfTeal = Color(0xFF86B0BD)       // #86B0BD
 val MdfPaleBlue = Color(0xFFCFEBFF)   // #CFEBFF

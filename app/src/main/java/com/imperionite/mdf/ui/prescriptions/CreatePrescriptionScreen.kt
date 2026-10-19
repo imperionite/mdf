@@ -1,5 +1,6 @@
 package com.imperionite.mdf.ui.prescriptions
 
+import android.annotation.SuppressLint
 import android.app.DatePickerDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import java.util.Locale
 
 private val storageDateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
+@SuppressLint("ConstantLocale")
 private val displayDateFormatter =
     DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault())
 

@@ -33,6 +33,25 @@ interface PrescriptionMedicineDao {
 
     @Query(
         """
+        SELECT EXISTS(
+            SELECT 1 FROM purchase_batch_items
+            WHERE prescriptionMedicineId = :medicineId
+        )
+        """
+    )
+    suspend fun hasPurchaseHistory(medicineId: Long): Boolean
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(purchasedQuantity), 0.0)
+        FROM purchase_batch_items
+        WHERE prescriptionMedicineId = :medicineId
+        """
+    )
+    suspend fun getPurchasedQuantity(medicineId: Long): Double
+
+    @Query(
+        """
         SELECT * FROM prescription_medicines
         WHERE prescriptionId = :prescriptionId
         ORDER BY id ASC

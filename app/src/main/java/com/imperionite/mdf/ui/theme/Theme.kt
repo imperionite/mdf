@@ -59,7 +59,7 @@ private val DarkColorScheme = darkColorScheme(
     surfaceTint = MdfTeal
 )
 
-
+@Suppress("FunctionName")
 @Composable
 fun MDFTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
