@@ -60,10 +60,10 @@ class ProjectRegressionTest {
             medicine.medicineName to database.prescriptionMedicineDao()
                 .getPurchasedQuantity(medicine.id)
         }
-        assertEquals(50.0, partialQuantities["Paracetamol 500 mg"]!!, 0.001)
-        assertEquals(20.0, partialQuantities["Amoxicillin 500 mg"]!!, 0.001)
-        assertEquals(10.0, partialQuantities["Cetirizine 10 mg"]!!, 0.001)
-        assertEquals(45.0, partialQuantities["Vitamin C 500 mg"]!!, 0.001)
+        assertEquals(50.0, partialQuantities["Amlodipine 5 mg"]!!, 0.001)
+        assertEquals(20.0, partialQuantities["Metformin 500 mg"]!!, 0.001)
+        assertEquals(10.0, partialQuantities["Losartan 50 mg"]!!, 0.001)
+        assertEquals(45.0, partialQuantities["Atorvastatin 20 mg"]!!, 0.001)
 
         completed.medicines.forEach { medicine ->
             assertEquals(
@@ -99,7 +99,7 @@ class ProjectRegressionTest {
         val partial = database.prescriptionDao().observeAll().first()
             .first { it.prescription.physicianName == "Dr. Maria Santos" }
         val retainedMedicines = partial.medicines
-            .filterNot { it.medicineName == "Paracetamol 500 mg" }
+            .filterNot { it.medicineName == "Amlodipine 5 mg" }
             .map { it.toDraft() }
 
         val repository = PrescriptionRepository(
@@ -126,7 +126,7 @@ class ProjectRegressionTest {
         assertEquals(12, countRows("purchase_batch_items"))
         assertEquals(
             50.0, database.prescriptionMedicineDao().getPurchasedQuantity(
-                partial.medicines.first { it.medicineName == "Paracetamol 500 mg" }.id
+                partial.medicines.first { it.medicineName == "Amlodipine 5 mg" }.id
             ), 0.001
         )
     }
@@ -139,7 +139,7 @@ class ProjectRegressionTest {
             .first { it.prescription.physicianName == "Dr. Maria Santos" }
         val drafts = partial.medicines.map { medicine ->
             medicine.toDraft().let { draft ->
-                if (medicine.medicineName == "Paracetamol 500 mg") {
+                if (medicine.medicineName == "Amlodipine 5 mg") {
                     draft.copy(prescribedQuantity = 40.0)
                 } else {
                     draft
@@ -169,9 +169,9 @@ class ProjectRegressionTest {
         assertNotNull("Expected the invalid quantity reduction to be rejected.", failure)
         assertEquals(
             100.0, database.prescriptionMedicineDao()
-            .getByPrescriptionId(partial.prescription.id)
-            .first { it.medicineName == "Paracetamol 500 mg" }
-            .prescribedQuantity, 0.001)
+                .getByPrescriptionId(partial.prescription.id)
+                .first { it.medicineName == "Amlodipine 5 mg" }
+                .prescribedQuantity, 0.001)
         assertEquals(12, countRows("purchase_batch_items"))
     }
 
@@ -182,20 +182,26 @@ class ProjectRegressionTest {
             .first { it.prescription.physicianName == "Dr. Antonio Reyes" }
         val losartan = completed.medicines.first { it.medicineName == "Losartan 50 mg" }
 
-        val before = pricesForMedicine("Losartan 50 mg")
+        val before = pricesForMedicine(
+            medicineName = "Losartan 50 mg",
+            prescriptionId = completed.prescription.id
+        )
         assertEquals(listOf(1200L, 1350L), before)
 
         database.prescriptionMedicineDao().update(
             losartan.copy(unitPriceCentavos = 1500L)
         )
 
-        val after = pricesForMedicine("Losartan 50 mg")
+        val after = pricesForMedicine(
+            medicineName = "Losartan 50 mg",
+            prescriptionId = completed.prescription.id
+        )
         assertEquals(before, after)
         assertEquals(
             1500L, database.prescriptionMedicineDao()
-            .getByPrescriptionId(completed.prescription.id)
-            .first { it.medicineName == "Losartan 50 mg" }
-            .unitPriceCentavos)
+                .getByPrescriptionId(completed.prescription.id)
+                .first { it.medicineName == "Losartan 50 mg" }
+                .unitPriceCentavos)
     }
 
     private fun countRows(tableName: String): Int {
@@ -223,22 +229,31 @@ class ProjectRegressionTest {
         }
     }
 
-    private fun pricesForMedicine(medicineName: String): List<Long> {
+    private fun pricesForMedicine(
+        medicineName: String,
+        prescriptionId: Long
+    ): List<Long> {
         val prices = mutableListOf<Long>()
+
         database.openHelper.readableDatabase.query(
             """
-            SELECT pbi.unitPriceCentavos
-            FROM purchase_batch_items AS pbi
-            INNER JOIN purchase_batches AS pb ON pb.id = pbi.purchaseBatchId
-            INNER JOIN prescription_medicines AS pm
-                ON pm.id = pbi.prescriptionMedicineId
-            WHERE pm.medicineName = ?
-            ORDER BY pb.purchaseDate ASC
-            """.trimIndent(),
-            arrayOf(medicineName)
+        SELECT pbi.unitPriceCentavos
+        FROM purchase_batch_items AS pbi
+        INNER JOIN purchase_batches AS pb
+            ON pb.id = pbi.purchaseBatchId
+        INNER JOIN prescription_medicines AS pm
+            ON pm.id = pbi.prescriptionMedicineId
+        WHERE pm.medicineName = ?
+          AND pb.prescriptionId = ?
+        ORDER BY pb.purchaseDate ASC
+        """.trimIndent(),
+            arrayOf(medicineName, prescriptionId.toString())
         ).use { cursor ->
-            while (cursor.moveToNext()) prices += cursor.getLong(0)
+            while (cursor.moveToNext()) {
+                prices += cursor.getLong(0)
+            }
         }
+
         return prices
     }
 
