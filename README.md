@@ -23,7 +23,7 @@ mdf is an offline-first Android application designed for managing prescriptions,
 
 ---
 
-## Architectural Choice: Local Persistence via Room Rationale
+## Local Persistence via Room Rationale
 
 While local data persistence was optional for this project, the decision was made to integrate Room directly into the core architecture starting in Milestone 1. 
 
