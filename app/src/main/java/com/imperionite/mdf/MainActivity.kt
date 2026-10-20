@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.rotate
+
 import com.imperionite.mdf.data.local.DatabaseProvider
 import com.imperionite.mdf.data.local.entity.PrescriptionWithMedicines
 import com.imperionite.mdf.data.repository.PrescriptionRepository
@@ -54,9 +63,11 @@ import com.imperionite.mdf.viewmodel.PrescriptionListViewModel
 import com.imperionite.mdf.viewmodel.PrescriptionListViewModelFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 class MainActivity : ComponentActivity() {
 
@@ -64,12 +75,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val database = DatabaseProvider.getDatabase(applicationContext)
+
         val prescriptionRepository = PrescriptionRepository(
             database = database,
             prescriptionDao = database.prescriptionDao(),
             medicineDao = database.prescriptionMedicineDao()
         )
-        val prescriptionFactory = PrescriptionListViewModelFactory(prescriptionRepository)
+
+        val prescriptionFactory =
+            PrescriptionListViewModelFactory(prescriptionRepository)
+
         val purchaseRepository = PurchaseRepository(
             database = database,
             prescriptionDao = database.prescriptionDao(),
@@ -77,24 +92,31 @@ class MainActivity : ComponentActivity() {
             purchaseBatchDao = database.purchaseBatchDao(),
             purchaseBatchItemDao = database.purchaseBatchItemDao()
         )
-        val detailsFactory = PrescriptionDetailsViewModel.Factory(purchaseRepository)
+
+        val detailsFactory =
+            PrescriptionDetailsViewModel.Factory(purchaseRepository)
 
         setContent {
             MDFTheme {
                 val navController = rememberNavController()
                 val snackbarHostState = remember { SnackbarHostState() }
                 val coroutineScope = rememberCoroutineScope()
+
                 val prescriptionViewModel: PrescriptionListViewModel = viewModel(
                     factory = prescriptionFactory
                 )
+
                 val detailsViewModel: PrescriptionDetailsViewModel = viewModel(
                     factory = detailsFactory
                 )
+
                 val prescriptions by prescriptionViewModel.prescriptions.collectAsState()
                 val details by detailsViewModel.details.collectAsState(initial = null)
                 val purchaseState by detailsViewModel.purchaseState.collectAsState()
+
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = backStackEntry?.destination?.route
+
                 val selectedPrescriptionId = backStackEntry?.arguments
                     ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID)
                     ?.takeIf { it > 0L }
@@ -102,11 +124,60 @@ class MainActivity : ComponentActivity() {
                 var selectedAttachmentUri by rememberSaveable {
                     mutableStateOf<String?>(null)
                 }
+
                 var isSavingPrescription by rememberSaveable {
                     mutableStateOf(false)
                 }
+
                 var saveError by rememberSaveable {
                     mutableStateOf<String?>(null)
+                }
+
+                // Prevent repeated navigation taps while a transition is settling.
+                var isNavigationLocked by remember {
+                    mutableStateOf(false)
+                }
+
+                fun navigateOnce(route: String) {
+                    if (
+                        isNavigationLocked ||
+                        isSavingPrescription ||
+                        purchaseState.isSaving
+                    ) {
+                        return
+                    }
+
+                    isNavigationLocked = true
+
+                    navController.navigate(route) {
+                        launchSingleTop = true
+                    }
+
+                    coroutineScope.launch {
+                        delay(650.milliseconds)
+                        isNavigationLocked = false
+                    }
+                }
+
+                fun popBackStackOnce() {
+                    if (
+                        isNavigationLocked ||
+                        isSavingPrescription ||
+                        purchaseState.isSaving
+                    ) {
+                        return
+                    }
+
+                    isNavigationLocked = true
+                    val popped = navController.popBackStack()
+
+                    coroutineScope.launch {
+                        if (popped) {
+                            delay(650.milliseconds)
+                        }
+
+                        isNavigationLocked = false
+                    }
                 }
 
                 LaunchedEffect(selectedPrescriptionId) {
@@ -115,7 +186,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Seed demo records only for a fresh database. Existing user data is never reset.
+                // Seed demo records only for a fresh database.
+                // Existing user data is never reset.
                 LaunchedEffect(database) {
                     try {
                         withContext(Dispatchers.IO) {
@@ -125,6 +197,7 @@ class MainActivity : ComponentActivity() {
                         if (exception is CancellationException) {
                             ensureActive()
                         }
+
                         snackbarHostState.showSnackbar(
                             "Demo data could not be prepared: " +
                                     (exception.localizedMessage ?: "unknown error")
@@ -134,27 +207,37 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(purchaseState.deletedBatchId) {
                     if (purchaseState.deletedBatchId != null) {
-                        snackbarHostState.showSnackbar("Purchase batch deleted successfully.")
+                        snackbarHostState.showSnackbar(
+                            "Purchase batch deleted successfully."
+                        )
                         detailsViewModel.clearPurchaseMessage()
                     }
                 }
 
                 LaunchedEffect(purchaseState.errorMessage, currentRoute) {
                     val message = purchaseState.errorMessage
-                    val isPurchaseScreen = currentRoute == AppRoutes.NEW_PURCHASE ||
-                            currentRoute == AppRoutes.EDIT_PURCHASE
+
+                    val isPurchaseScreen =
+                        currentRoute == AppRoutes.NEW_PURCHASE ||
+                                currentRoute == AppRoutes.EDIT_PURCHASE
+
                     if (message != null && !isPurchaseScreen) {
                         snackbarHostState.showSnackbar(message)
                         detailsViewModel.clearPurchaseMessage()
                     }
                 }
 
-                // Do not let system Back leave a screen while a database write is in progress.
-                BackHandler(enabled = isSavingPrescription || purchaseState.isSaving) { }
+                // Prevent system Back while a database write is in progress.
+                BackHandler(
+                    enabled = isSavingPrescription || purchaseState.isSaving
+                ) {
+                    // Intentionally consume Back during an active save.
+                }
 
                 fun finishPurchaseSave(message: String) {
                     navController.popBackStack()
                     detailsViewModel.clearPurchaseMessage()
+
                     coroutineScope.launch {
                         snackbarHostState.showSnackbar(message)
                     }
@@ -170,8 +253,10 @@ class MainActivity : ComponentActivity() {
                                 Intent.FLAG_GRANT_READ_URI_PERMISSION
                             )
                         } catch (_: SecurityException) {
-                            // Some document providers do not offer persistable permissions.
+                            // Some document providers do not support
+                            // persistable URI permissions.
                         }
+
                         selectedAttachmentUri = uri.toString()
                         saveError = null
                     }
@@ -186,27 +271,35 @@ class MainActivity : ComponentActivity() {
                         composable(AppRoutes.PRESCRIPTIONS) {
                             PrescriptionListScreen(
                                 prescriptions = prescriptions,
+
                                 onCreatePrescription = {
                                     if (!isSavingPrescription) {
                                         selectedAttachmentUri = null
                                         saveError = null
-                                        navController.navigate(AppRoutes.CREATE_PRESCRIPTION) {
-                                            launchSingleTop = true
-                                        }
+                                        navigateOnce(
+                                            AppRoutes.CREATE_PRESCRIPTION
+                                        )
                                     }
                                 },
+
                                 onEditPrescription = { item ->
                                     if (!isSavingPrescription) {
-                                        selectedAttachmentUri = item.prescription.attachmentUri
+                                        selectedAttachmentUri =
+                                            item.prescription.attachmentUri
                                         saveError = null
-                                        navController.navigate(
-                                            AppRoutes.editPrescription(item.prescription.id)
-                                        ) { launchSingleTop = true }
+
+                                        navigateOnce(
+                                            AppRoutes.editPrescription(
+                                                item.prescription.id
+                                            )
+                                        )
                                     }
                                 },
+
                                 onDeletePrescription = { prescription ->
                                     prescriptionViewModel.deletePrescription(
                                         prescription = prescription,
+
                                         onDeleted = {
                                             coroutineScope.launch {
                                                 snackbarHostState.showSnackbar(
@@ -214,22 +307,27 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }
                                         },
+
                                         onError = { message ->
                                             coroutineScope.launch {
-                                                snackbarHostState.showSnackbar(message)
+                                                snackbarHostState.showSnackbar(
+                                                    message
+                                                )
                                             }
                                         }
                                     )
                                 },
+
                                 onOpenDetails = { item ->
-                                    navController.navigate(
+                                    navigateOnce(
                                         AppRoutes.details(item.prescription.id)
-                                    ) { launchSingleTop = true }
+                                    )
                                 },
+
                                 onOpenInsights = { item ->
-                                    navController.navigate(
+                                    navigateOnce(
                                         AppRoutes.insights(item.prescription.id)
-                                    ) { launchSingleTop = true }
+                                    )
                                 }
                             )
                         }
@@ -240,31 +338,46 @@ class MainActivity : ComponentActivity() {
                                 selectedAttachmentUri = selectedAttachmentUri,
                                 isSaving = isSavingPrescription,
                                 errorMessage = saveError,
+
                                 onChooseAttachment = {
-                                    attachmentPicker.launch(arrayOf("application/pdf", "image/*"))
+                                    attachmentPicker.launch(
+                                        arrayOf("application/pdf", "image/*")
+                                    )
                                 },
-                                onRemoveAttachment = { selectedAttachmentUri = null },
-                                onSave = { physicianName, prescriptionDate, notes, medicines ->
+
+                                onRemoveAttachment = {
+                                    selectedAttachmentUri = null
+                                },
+
+                                onSave = { physicianName,
+                                           prescriptionDate,
+                                           notes,
+                                           medicines ->
+
                                     if (!isSavingPrescription) {
                                         isSavingPrescription = true
                                         saveError = null
+
                                         prescriptionViewModel.addPrescription(
                                             physicianName = physicianName,
                                             prescriptionDate = prescriptionDate,
                                             notes = notes,
                                             attachmentUri = selectedAttachmentUri,
                                             medicines = medicines,
+
                                             onSaved = {
                                                 isSavingPrescription = false
                                                 selectedAttachmentUri = null
                                                 saveError = null
                                                 navController.popBackStack()
+
                                                 coroutineScope.launch {
                                                     snackbarHostState.showSnackbar(
                                                         "Prescription saved successfully."
                                                     )
                                                 }
                                             },
+
                                             onError = { message ->
                                                 isSavingPrescription = false
                                                 saveError = message
@@ -272,11 +385,12 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 },
+
                                 onCancel = {
                                     if (!isSavingPrescription) {
                                         selectedAttachmentUri = null
                                         saveError = null
-                                        navController.popBackStack()
+                                        popBackStackOnce()
                                     }
                                 }
                             )
@@ -290,13 +404,16 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         ) { entry ->
+
                             val prescriptionId = entry.arguments
                                 ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID)
-                            val initialPrescription = prescriptions.firstOrNull {
-                                it.prescription.id == prescriptionId
-                            } ?: details?.prescription?.takeIf {
-                                it.prescription.id == prescriptionId
-                            }
+
+                            val initialPrescription =
+                                prescriptions.firstOrNull {
+                                    it.prescription.id == prescriptionId
+                                } ?: details?.prescription?.takeIf {
+                                    it.prescription.id == prescriptionId
+                                }
 
                             if (initialPrescription == null) {
                                 LoadingContent()
@@ -306,34 +423,48 @@ class MainActivity : ComponentActivity() {
                                     selectedAttachmentUri = selectedAttachmentUri,
                                     isSaving = isSavingPrescription,
                                     errorMessage = saveError,
+
                                     onChooseAttachment = {
                                         attachmentPicker.launch(
                                             arrayOf("application/pdf", "image/*")
                                         )
                                     },
-                                    onRemoveAttachment = { selectedAttachmentUri = null },
-                                    onSave = { physicianName, prescriptionDate, notes, medicines ->
+
+                                    onRemoveAttachment = {
+                                        selectedAttachmentUri = null
+                                    },
+
+                                    onSave = { physicianName,
+                                               prescriptionDate,
+                                               notes,
+                                               medicines ->
+
                                         if (!isSavingPrescription) {
                                             isSavingPrescription = true
                                             saveError = null
+
                                             prescriptionViewModel.updatePrescription(
-                                                prescriptionId = initialPrescription.prescription.id,
+                                                prescriptionId =
+                                                    initialPrescription.prescription.id,
                                                 physicianName = physicianName,
                                                 prescriptionDate = prescriptionDate,
                                                 notes = notes,
                                                 attachmentUri = selectedAttachmentUri,
                                                 medicines = medicines,
+
                                                 onSaved = {
                                                     isSavingPrescription = false
                                                     selectedAttachmentUri = null
                                                     saveError = null
                                                     navController.popBackStack()
+
                                                     coroutineScope.launch {
                                                         snackbarHostState.showSnackbar(
                                                             "Prescription updated successfully."
                                                         )
                                                     }
                                                 },
+
                                                 onError = { message ->
                                                     isSavingPrescription = false
                                                     saveError = message
@@ -341,11 +472,12 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     },
+
                                     onCancel = {
                                         if (!isSavingPrescription) {
                                             selectedAttachmentUri = null
                                             saveError = null
-                                            navController.popBackStack()
+                                            popBackStackOnce()
                                         }
                                     }
                                 )
@@ -360,45 +492,77 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         ) { entry ->
+
                             val prescriptionId = entry.arguments
-                                ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID) ?: return@composable
+                                ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID) ?: 0L
+
+                            if (prescriptionId <= 0L) {
+                                UnavailableContent(
+                                    message = "This prescription route is invalid.",
+                                    onBack = { popBackStackOnce() }
+                                )
+                                return@composable
+                            }
+
                             val currentDetails = details?.takeIf {
                                 it.prescription.prescription.id == prescriptionId
                             }
+
                             if (currentDetails == null) {
                                 LoadingContent()
                             } else {
                                 PrescriptionDetailsScreen(
                                     details = currentDetails,
+
                                     onBack = {
-                                        if (!purchaseState.isSaving) navController.popBackStack()
-                                    },
-                                    onEdit = {
-                                        if (!purchaseState.isSaving && !isSavingPrescription) {
-                                            selectedAttachmentUri = currentDetails.prescription
-                                                .prescription.attachmentUri
-                                            saveError = null
-                                            navController.navigate(
-                                                AppRoutes.editPrescription(prescriptionId)
-                                            ) { launchSingleTop = true }
+                                        if (!purchaseState.isSaving) {
+                                            popBackStackOnce()
                                         }
                                     },
+
+                                    onEdit = {
+                                        if (
+                                            !purchaseState.isSaving &&
+                                            !isSavingPrescription
+                                        ) {
+                                            selectedAttachmentUri =
+                                                currentDetails.prescription
+                                                    .prescription.attachmentUri
+                                            saveError = null
+
+                                            navigateOnce(
+                                                AppRoutes.editPrescription(
+                                                    prescriptionId
+                                                )
+                                            )
+                                        }
+                                    },
+
                                     onNewPurchase = {
                                         if (!purchaseState.isSaving) {
                                             detailsViewModel.clearPurchaseMessage()
-                                            navController.navigate(
-                                                AppRoutes.newPurchase(prescriptionId)
-                                            ) { launchSingleTop = true }
+
+                                            navigateOnce(
+                                                AppRoutes.newPurchase(
+                                                    prescriptionId
+                                                )
+                                            )
                                         }
                                     },
+
                                     onEditBatch = { batchId ->
                                         if (!purchaseState.isSaving) {
                                             detailsViewModel.clearPurchaseMessage()
-                                            navController.navigate(
-                                                AppRoutes.editPurchase(prescriptionId, batchId)
-                                            ) { launchSingleTop = true }
+
+                                            navigateOnce(
+                                                AppRoutes.editPurchase(
+                                                    prescriptionId,
+                                                    batchId
+                                                )
+                                            )
                                         }
                                     },
+
                                     onDeleteBatch = { batchId ->
                                         if (!purchaseState.isSaving) {
                                             detailsViewModel.deletePurchase(batchId)
@@ -416,17 +580,28 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         ) { entry ->
+
                             val prescriptionId = entry.arguments
-                                ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID) ?: return@composable
+                                ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID) ?: 0L
+
+                            if (prescriptionId <= 0L) {
+                                UnavailableContent(
+                                    message = "This prescription route is invalid.",
+                                    onBack = { popBackStackOnce() }
+                                )
+                                return@composable
+                            }
+
                             val currentDetails = details?.takeIf {
                                 it.prescription.prescription.id == prescriptionId
                             }
+
                             if (currentDetails == null) {
                                 LoadingContent()
                             } else {
                                 PrescriptionInsightsScreen(
                                     details = currentDetails,
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { popBackStackOnce() }
                                 )
                             }
                         }
@@ -439,33 +614,51 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         ) { entry ->
+
                             val prescriptionId = entry.arguments
-                                ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID) ?: return@composable
+                                ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID) ?: 0L
+
+                            if (prescriptionId <= 0L) {
+                                UnavailableContent(
+                                    message = "This prescription route is invalid.",
+                                    onBack = { popBackStackOnce() }
+                                )
+                                return@composable
+                            }
+
                             PurchaseBatchDestination(
                                 prescriptionId = prescriptionId,
+
                                 details = details?.takeIf {
                                     it.prescription.prescription.id == prescriptionId
                                 },
+
                                 batchId = null,
                                 isSaving = purchaseState.isSaving,
                                 errorMessage = purchaseState.errorMessage,
+
                                 onBack = {
                                     if (!purchaseState.isSaving) {
                                         detailsViewModel.clearPurchaseMessage()
-                                        navController.popBackStack()
+                                        popBackStackOnce()
                                     }
                                 },
+
                                 onSave = { date, notes, items ->
                                     detailsViewModel.savePurchase(
                                         prescriptionId = prescriptionId,
                                         purchaseDate = date,
                                         notes = notes,
                                         items = items,
+
                                         onSaved = {
-                                            finishPurchaseSave("Purchase batch saved successfully.")
+                                            finishPurchaseSave(
+                                                "Purchase batch saved successfully."
+                                            )
                                         }
                                     )
                                 },
+
                                 onUpdate = { _, _, _, _ -> }
                             )
                         }
@@ -481,39 +674,87 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         ) { entry ->
+
                             val prescriptionId = entry.arguments
-                                ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID) ?: return@composable
+                                ?.getLong(AppRoutes.ARG_PRESCRIPTION_ID) ?: 0L
+
                             val batchId = entry.arguments
-                                ?.getLong(AppRoutes.ARG_BATCH_ID) ?: return@composable
+                                ?.getLong(AppRoutes.ARG_BATCH_ID) ?: 0L
+
+                            if (prescriptionId <= 0L || batchId <= 0L) {
+                                UnavailableContent(
+                                    message = "This purchase route is invalid.",
+                                    onBack = { popBackStackOnce() }
+                                )
+                                return@composable
+                            }
+
                             PurchaseBatchDestination(
                                 prescriptionId = prescriptionId,
+
                                 details = details?.takeIf {
                                     it.prescription.prescription.id == prescriptionId
                                 },
+
                                 batchId = batchId,
                                 isSaving = purchaseState.isSaving,
                                 errorMessage = purchaseState.errorMessage,
+
                                 onBack = {
                                     if (!purchaseState.isSaving) {
                                         detailsViewModel.clearPurchaseMessage()
-                                        navController.popBackStack()
+                                        popBackStackOnce()
                                     }
                                 },
+
                                 onSave = { _, _, _ -> },
+
                                 onUpdate = { id, date, notes, items ->
                                     detailsViewModel.updatePurchase(
                                         batchId = id,
                                         purchaseDate = date,
                                         notes = notes,
                                         items = items,
+
                                         onSaved = {
-                                            finishPurchaseSave("Purchase batch updated successfully.")
+                                            finishPurchaseSave(
+                                                "Purchase batch updated successfully."
+                                            )
                                         }
                                     )
                                 }
                             )
                         }
                     }
+
+                    // Visible navigation overlay: opaque enough to be noticed,
+                    // with a spinner and label instead of an unlabeled indicator.
+
+                    if (isNavigationLocked) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                AnimatedNavigationSpinner()
+
+                                Text(
+                                    text = "Opening screen…",
+                                    modifier = Modifier.padding(top = 16.dp),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
 
                     SnackbarHost(
                         hostState = snackbarHostState,
@@ -568,8 +809,12 @@ private fun PurchaseBatchDestination(
     onSave: (String, String, List<PurchaseItemDraft>) -> Unit,
     onUpdate: (Long, String, String, List<PurchaseItemDraft>) -> Unit
 ) {
-    val editingBatch = if (batchId == null) null else {
-        details?.purchaseBatches?.firstOrNull { it.batch.id == batchId }
+    val editingBatch = if (batchId == null) {
+        null
+    } else {
+        details?.purchaseBatches?.firstOrNull {
+            it.batch.id == batchId
+        }
     }
 
     if (details == null) {
@@ -598,11 +843,18 @@ private fun PurchaseBatchDestination(
 @Suppress("FunctionName")
 @Composable
 private fun LoadingContent() {
-    Box(
+    Column(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         CircularProgressIndicator()
+
+        Text(
+            text = "Loading prescription data…",
+            modifier = Modifier.padding(top = 12.dp),
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
 
@@ -619,9 +871,40 @@ private fun UnavailableContent(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(message, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge
+        )
+
         TextButton(onClick = onBack) {
             Text("Go back")
         }
     }
 }
+
+@Suppress("FunctionName")
+@Composable
+private fun AnimatedNavigationSpinner() {
+    val transition = rememberInfiniteTransition(
+        label = "navigationSpinner"
+    )
+
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 700,
+                easing = LinearEasing
+            )
+        ),
+        label = "spinnerRotation"
+    )
+
+    CircularProgressIndicator(
+        modifier = Modifier.rotate(rotation),
+        strokeWidth = 4.dp,
+        color = MaterialTheme.colorScheme.primary
+    )
+}
+
