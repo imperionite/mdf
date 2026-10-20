@@ -25,7 +25,7 @@ mdf is an offline-first Android application designed for managing prescriptions,
 
 ## Local Persistence via Room Rationale
 
-While local data persistence was optional for this project, the decision was made to integrate Room directly into the core architecture starting in [Milestone 1](https://docs.google.com/document/d/159k5Q9VZ9QieaRSABpE8hMTOG7tINOPJh0Zd3LwD6xw/edit?usp=sharing). 
+While local data persistence was optional for this project, the decision was made to integrate Room directly into the core architecture starting in [Milestone 1](https://docs.google.com/document/d/159k5Q9VZ9QieaRSABpE8hMTOG7tINOPJh0Zd3LwD6xw/edit?usp=sharing).
 
 Setting up a proper database early allowed the developer to gain practical experience with modern Android data tools while ensuring the app had a realistic, offline-first design from day one. Rather than treating persistence as something to retrofit later, building it in from the start established a clean data layer and saved the project from a major refactor down the line.
 
@@ -88,8 +88,14 @@ The project includes both unit tests and connected Android instrumentation/regre
 
 ---
 
-## Demo Data
+## Seed Data For Demo
 
 A fresh database is automatically seeded with two prescription scenarios: one featuring partial purchases and one with completed purchases.
 
 Existing unmarked user data is not intentionally overwritten or reset. _Demo records are provided strictly for software evaluation and do not constitute medical advice._
+
+---
+
+## Changelog
+
+- Baseline: [https://github.com/imperionite/mdf/releases/tag/v1.0.0](https://github.com/imperionite/mdf/releases/tag/v1.0.0)
