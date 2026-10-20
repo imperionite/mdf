@@ -23,6 +23,14 @@ mdf is an offline-first Android application designed for managing prescriptions,
 
 ---
 
+## Architectural Choice: Local Persistence via Room Rationale
+
+While local data persistence was optional for this project, the decision was made to integrate Room directly into the core architecture starting in Milestone 1. 
+
+Setting up a proper database early allowed the developer to gain practical experience with modern Android data tools while ensuring the app had a realistic, offline-first design from day one. Rather than treating persistence as something to retrofit later, building it in from the start established a clean data layer and saved the project from a major refactor down the line.
+
+---
+
 ## Development Environment
 
 **Windows 11 is the primary operating system setup documented and validated for this project.** Other operating systems have not been formally validated.
@@ -35,7 +43,6 @@ mdf is an offline-first Android application designed for managing prescriptions,
 - USB-debugging-enabled Android device _(Note: Android Studio Emulator can be used, but performance is not validated due to resource limitations of running heavy system virtualization)_
 
 If `adb` is not recognized in your terminal, add the Android SDK's `platform-tools` directory to your Windows `PATH`, or invoke `adb.exe` using its full path.
-
 
 ## Command Reference
 
