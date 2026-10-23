@@ -177,36 +177,35 @@ MS2 refines these use cases to improve usability, data integrity, and maintainab
 
 ## Screen Snapshots
 
-### Home Screen
-
-![Home Screen](https://drive.google.com/uc?id=1JahjMXTy7RKH1sE5S-jTrHTXe0BnR59h)
-
----
-
-### Add Prescription
-
-![Add Prescription](https://drive.google.com/uc?id=1c3dt-L6q_ZfozsIByrjkOHbeO5yfoqjs)
-
----
-
-### View Prescription Details
-
-![View Prescription Details](https://drive.google.com/uc?id=1K6IkyJSy4-jNy5A5pO3XZGVw_0OoE6OO)
-
----
-
-### Edit Prescription
-
-![Edit Prescription](https://drive.google.com/uc?id=1-2ymaDKxFtLG48decdoed8BYaLVlBziD)
-
----
-
-### Update Batch Purchase
-
-![Update Batch Purchase](https://drive.google.com/uc?id=1LoIrxjpq1NxxuC04qzzwYSHIY1hUCJxC)
-
----
-
-### Insight Report View
-
-![Insight Report View](https://drive.google.com/uc?id=1J1-rL_LhD467sEW68iqtOvl_yIKWGYH2)
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Home Screen</strong><br><br>
+      <img src="https://drive.google.com/uc?id=1JahjMXTy7RKH1sE5S-jTrHTXe0BnR59h" width="200" alt="MDF Home Screen">
+    </td>
+    <td align="center" width="50%">
+      <strong>Add Prescription</strong><br><br>
+      <img src="https://drive.google.com/uc?id=1c3dt-L6q_ZfozsIByrjkOHbeO5yfoqjs" width="200" alt="MDF Add Prescription Screen">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>View Prescription Details</strong><br><br>
+      <img src="https://drive.google.com/uc?id=1K6IkyJSy4-jNy5A5pO3XZGVw_0OoE6OO" width="200" alt="MDF Prescription Details Screen">
+    </td>
+    <td align="center" width="50%">
+      <strong>Edit Prescription</strong><br><br>
+      <img src="https://drive.google.com/uc?id=1-2ymaDKxFtLG48decdoed8BYaLVlBziD" width="200" alt="MDF Edit Prescription Screen">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Update Batch Purchase</strong><br><br>
+      <img src="https://drive.google.com/uc?id=1LoIrxjpq1NxxuC04qzzwYSHIY1hUCJxC" width="200" alt="MDF Update Batch Purchase Screen">
+    </td>
+    <td align="center" width="50%">
+      <strong>Insight Report</strong><br><br>
+      <img src="https://drive.google.com/uc?id=1J1-rL_LhD467sEW68iqtOvl_yIKWGYH2" width="200" alt="MDF Insight Report Screen">
+    </td>
+  </tr>
+</table>
